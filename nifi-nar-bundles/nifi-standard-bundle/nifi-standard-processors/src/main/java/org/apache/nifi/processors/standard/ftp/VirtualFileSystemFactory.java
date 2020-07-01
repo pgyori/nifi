@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.nifi.processors.standard.ftp;
 
 import org.apache.ftpserver.ftplet.FileSystemFactory;
@@ -22,8 +21,15 @@ import org.apache.ftpserver.ftplet.FileSystemView;
 import org.apache.ftpserver.ftplet.User;
 
 public class VirtualFileSystemFactory implements FileSystemFactory {
+
+    private VirtualFileSystem fileSystem;
+
+    public VirtualFileSystemFactory(VirtualFileSystem fileSystem) {
+        this.fileSystem = fileSystem;
+    }
+
     @Override
     public FileSystemView createFileSystemView(User user) {
-        return new VirtualFileSystemView(user);
+        return new VirtualFileSystemView(user, fileSystem);
     }
 }

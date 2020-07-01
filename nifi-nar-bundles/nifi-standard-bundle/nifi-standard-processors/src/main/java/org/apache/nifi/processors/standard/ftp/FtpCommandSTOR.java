@@ -14,11 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.nifi.processors.standard.ftp;
 
 import org.apache.ftpserver.command.AbstractCommand;
-import org.apache.ftpserver.command.impl.STOR;
 import org.apache.ftpserver.ftplet.DataConnection;
 import org.apache.ftpserver.ftplet.DataConnectionFactory;
 import org.apache.ftpserver.ftplet.DefaultFtpReply;
@@ -33,6 +31,7 @@ import org.apache.ftpserver.impl.LocalizedDataTransferFtpReply;
 import org.apache.ftpserver.impl.LocalizedFtpReply;
 import org.apache.ftpserver.impl.ServerFtpStatistics;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.ProcessSessionFactory;
 import org.apache.nifi.processors.standard.ListenFTP;
@@ -47,7 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class FtpCommandSTOR extends AbstractCommand {
 
-    private final Logger LOG = LoggerFactory.getLogger(STOR.class);
+    private final Logger LOG = LoggerFactory.getLogger(FtpCommandSTOR.class);
     private final AtomicReference<ProcessSessionFactory> sessionFactoryReference;
 
     public FtpCommandSTOR(final AtomicReference<ProcessSessionFactory> sessionFactoryReference) {
@@ -57,8 +56,7 @@ public class FtpCommandSTOR extends AbstractCommand {
     /**
      * Execute command.
      */
-    public void execute(final FtpIoSession ftpSession, final FtpServerContext context, final FtpRequest request)
-            throws IOException, FtpException {
+    public void execute(final FtpIoSession ftpSession, final FtpServerContext context, final FtpRequest request) {
         try {
             executeCommand(ftpSession, context, request);
         } catch (FtpNegativeCompletionException ftpNegativeCompletionException) {
@@ -80,8 +78,7 @@ public class FtpCommandSTOR extends AbstractCommand {
     private void executeCommand(FtpIoSession ftpSession, FtpServerContext context, FtpRequest request)
             throws FtpNegativeCompletionException {
 
-        final String requestArgument = getArgument(request);
-        final String fileName = requestArgument; //TODO: request argument might contain target path as well
+        final String fileName = getArgument(request); //TODO: request argument might contain target path as well (already handled in VirtualFtpFile.path.resolve() but double check!)
 
         checkDataConnection(ftpSession);
 
@@ -174,6 +171,8 @@ public class FtpCommandSTOR extends AbstractCommand {
             ftpStat.setUpload(ftpSession, ftpFile, transferredBytes);
 
             //TODO: add flowfile attributes
+            processSession.putAttribute(flowFile, CoreAttributes.FILENAME.key(), ftpFile.getName());
+            processSession.putAttribute(flowFile, CoreAttributes.PATH.key(), getPath(ftpFile));
             //TODO: provenance event
             processSession.transfer(flowFile, ListenFTP.RELATIONSHIP_SUCCESS);
             processSession.commit();
@@ -200,6 +199,18 @@ public class FtpCommandSTOR extends AbstractCommand {
                 ftpFile.getAbsolutePath(), ftpFile, transferredBytes));
     }
 
+    private String getPath(FtpFile ftpFile) {
+        String absolutePath = ftpFile.getAbsolutePath();
+        int endIndex = absolutePath.length() - ftpFile.getName().length();
+        return ftpFile.getAbsolutePath().substring(0, endIndex);
+    }
+
+    private ProcessSession createProcessSession() {
+        final ProcessSessionFactory processSessionFactory = getProcessSessionFactory();
+        final ProcessSession processSession = processSessionFactory.createSession();
+        return processSession;
+    }
+
     private ProcessSessionFactory getProcessSessionFactory() {
         ProcessSessionFactory processSessionFactory;
         do {
@@ -213,11 +224,4 @@ public class FtpCommandSTOR extends AbstractCommand {
         } while (processSessionFactory == null);
         return processSessionFactory;
     }
-
-    private ProcessSession createProcessSession() {
-        final ProcessSessionFactory processSessionFactory = getProcessSessionFactory();
-        final ProcessSession processSession = processSessionFactory.createSession();
-        return processSession;
-    }
-
 }

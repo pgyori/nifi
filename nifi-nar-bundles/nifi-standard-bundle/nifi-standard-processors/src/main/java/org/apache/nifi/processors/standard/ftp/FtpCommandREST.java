@@ -17,20 +17,32 @@
 package org.apache.nifi.processors.standard.ftp;
 
 import org.apache.ftpserver.command.AbstractCommand;
+import org.apache.ftpserver.command.impl.REST;
 import org.apache.ftpserver.ftplet.DefaultFtpReply;
 import org.apache.ftpserver.ftplet.FtpReply;
 import org.apache.ftpserver.ftplet.FtpRequest;
 import org.apache.ftpserver.impl.FtpIoSession;
 import org.apache.ftpserver.impl.FtpServerContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-public class FtpCommandDELE extends AbstractCommand {
-    @Override
-    public void execute(FtpIoSession session, FtpServerContext context, FtpRequest request) throws IOException {
+public class FtpCommandREST extends AbstractCommand {
+
+    private final Logger LOG = LoggerFactory.getLogger(FtpCommandREST.class);
+
+    /**
+     * Execute command
+     */
+    public void execute(final FtpIoSession session,
+                        final FtpServerContext context, final FtpRequest request)
+            throws IOException {
+
         // reset state variables
         session.resetState();
 
-        session.write(new DefaultFtpReply(FtpReply.REPLY_502_COMMAND_NOT_IMPLEMENTED, "Deletion of file system entries is not supported."));
+        session.write(new DefaultFtpReply(FtpReply.REPLY_502_COMMAND_NOT_IMPLEMENTED, "Operation (REST) not supported."));
     }
+
 }

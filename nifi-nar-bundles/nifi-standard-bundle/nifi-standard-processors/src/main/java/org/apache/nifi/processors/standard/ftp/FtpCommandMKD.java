@@ -17,20 +17,41 @@
 package org.apache.nifi.processors.standard.ftp;
 
 import org.apache.ftpserver.command.AbstractCommand;
+import org.apache.ftpserver.command.impl.MKD;
 import org.apache.ftpserver.ftplet.DefaultFtpReply;
+import org.apache.ftpserver.ftplet.FtpException;
 import org.apache.ftpserver.ftplet.FtpReply;
 import org.apache.ftpserver.ftplet.FtpRequest;
 import org.apache.ftpserver.impl.FtpIoSession;
 import org.apache.ftpserver.impl.FtpServerContext;
+import org.apache.ftpserver.impl.LocalizedFileActionFtpReply;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-public class FtpCommandDELE extends AbstractCommand {
-    @Override
-    public void execute(FtpIoSession session, FtpServerContext context, FtpRequest request) throws IOException {
-        // reset state variables
+public class FtpCommandMKD extends AbstractCommand {
+
+    private final Logger LOG = LoggerFactory.getLogger(FtpCommandMKD.class);
+
+    /**
+     * Execute command.
+     */
+    public void execute(final FtpIoSession session,
+                        final FtpServerContext context, final FtpRequest request)
+            throws IOException, FtpException {
+
+        // reset state
         session.resetState();
 
-        session.write(new DefaultFtpReply(FtpReply.REPLY_502_COMMAND_NOT_IMPLEMENTED, "Deletion of file system entries is not supported."));
+        // argument check
+        String fileName = request.getArgument();
+        if (fileName == null) {
+            session.write(LocalizedFileActionFtpReply.translate(session, request, context,
+                    FtpReply.REPLY_501_SYNTAX_ERROR_IN_PARAMETERS_OR_ARGUMENTS,
+                    "MKD", null, null));
+        } else {
+            session.write(new DefaultFtpReply(FtpReply.REPLY_257_PATHNAME_CREATED, "Directory created."));
+        }
     }
 }

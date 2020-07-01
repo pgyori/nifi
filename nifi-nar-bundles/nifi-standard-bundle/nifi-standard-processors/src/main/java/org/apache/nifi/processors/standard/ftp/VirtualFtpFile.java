@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.nifi.processors.standard.ftp;
 
 import org.apache.ftpserver.ftplet.FtpFile;
@@ -23,62 +22,29 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.List;
 
 public class VirtualFtpFile implements FtpFile {
 
-    // the file name with respect to the user root.
-    // The path separator character will be '/' and
-    // it will always begin with '/'.
-    private final String fileName;
+    private VirtualPath path;
+    private VirtualFileSystem fileSystem;
 
-    /**
-     * Constructor, internal do not use directly.
-     */
-    protected VirtualFtpFile(String fileName) throws IllegalArgumentException {
-        if (fileName == null) {
-            throw new IllegalArgumentException("fileName cannot be null");
-        } else if (fileName.length() == 0) {
-            throw new IllegalArgumentException("fileName cannot be empty");
-        } else if (fileName.charAt(0) != '/') {
-            throw new IllegalArgumentException("fileName must be an absolute path");
+    protected VirtualFtpFile(VirtualPath path, VirtualFileSystem fileSystem) throws IllegalArgumentException {
+        if (path == null || fileSystem == null) {
+            throw new IllegalArgumentException("File path and fileSystem cannot be null");
         }
-
-        this.fileName = fileName;
+        this.path = path;
+        this.fileSystem = fileSystem;
     }
 
     @Override
     public String getAbsolutePath() {
-        return removeLastSlash(fileName);
-    }
-
-    private String removeLastSlash(String path) {
-        String pathWithLastSlashRemoved;
-        if ((path.length() != 1) && (path.endsWith("/"))) {
-            pathWithLastSlashRemoved = path.substring(0, path.length() - 1);
-        } else {
-            pathWithLastSlashRemoved = path;
-        }
-        return pathWithLastSlashRemoved;
+        return path.toString();
     }
 
     @Override
     public String getName() {
-        return getFileNameFromPath(fileName);
-    }
-
-    private String getFileNameFromPath(String path) {
-        if (path.equals("/")) {
-            return path;
-        }
-        String pathWithLastSlashRemoved = removeLastSlash(fileName);
-        int lastSlashIndex = pathWithLastSlashRemoved.lastIndexOf('/');
-        if (lastSlashIndex != -1) {
-            return pathWithLastSlashRemoved.substring(lastSlashIndex + 1);
-        } else {
-            return pathWithLastSlashRemoved;
-        }
+        return path.getFileName();
     }
 
     @Override
@@ -98,7 +64,7 @@ public class VirtualFtpFile implements FtpFile {
 
     @Override
     public boolean doesExist() {
-        return true;
+        return fileSystem.exists(path);
     }
 
     @Override
@@ -112,18 +78,18 @@ public class VirtualFtpFile implements FtpFile {
     }
 
     @Override
-    public boolean isRemovable() throws UnsupportedOperationException {
-        throw new UnsupportedOperationException("VirtualFtpFile.isRemovable()");
+    public boolean isRemovable() {
+        return true; //Every virtual directory can be deleted
     }
 
     @Override
-    public String getOwnerName() throws UnsupportedOperationException {
-        throw new UnsupportedOperationException("VirtualFtpFile.getOwnerName()");
+    public String getOwnerName() {
+        return "Owner"; //TODO: used in NLST -> LISTFileFormater class
     }
 
     @Override
-    public String getGroupName() throws UnsupportedOperationException {
-        throw new UnsupportedOperationException("VirtualFtpFile.getGroupName()");
+    public String getGroupName() {
+        return "Group"; //TODO: used in NLST -> LISTFileFormater class
     }
 
     @Override
@@ -152,13 +118,13 @@ public class VirtualFtpFile implements FtpFile {
     }
 
     @Override
-    public boolean mkdir() throws UnsupportedOperationException {
-        throw new UnsupportedOperationException("VirtualFtpFile.mkdir()");
+    public boolean mkdir() {
+        return fileSystem.mkdir(path);
     }
 
     @Override
-    public boolean delete() throws UnsupportedOperationException {
-        throw new UnsupportedOperationException("VirtualFtpFile.delete()");
+    public boolean delete() {
+        return fileSystem.delete(path);
     }
 
     @Override
@@ -167,8 +133,8 @@ public class VirtualFtpFile implements FtpFile {
     }
 
     @Override
-    public List<? extends FtpFile> listFiles() throws UnsupportedOperationException {
-        return Collections.emptyList();
+    public List<? extends FtpFile> listFiles() {
+        return fileSystem.listChildren(path);
     }
 
     @Override
@@ -180,4 +146,17 @@ public class VirtualFtpFile implements FtpFile {
     public InputStream createInputStream(long l) throws IOException,  UnsupportedOperationException {
         throw new UnsupportedOperationException("VirtualFtpFile.createInputStream()");
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this) {
+            return true;
+        }
+        if (!(o instanceof VirtualFtpFile)) {
+            return false;
+        }
+        VirtualFtpFile other = (VirtualFtpFile) o;
+        return path.equals(other.path);
+    }
+
 }

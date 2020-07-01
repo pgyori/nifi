@@ -25,20 +25,35 @@ import org.apache.ftpserver.ftplet.User;
 import org.apache.ftpserver.usermanager.impl.BaseUser;
 import org.apache.ftpserver.usermanager.impl.WritePermission;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 public class TestVirtualFileSystemView {
 
     private FileSystemView fileSystemView;
+    private static VirtualFileSystem fileSystem;
+
+    @BeforeClass
+    public static void setupVirtualFileSystem() {
+        fileSystem = new VirtualFileSystem();
+        fileSystem.mkdir(new VirtualPath("/Directory1"));
+        fileSystem.mkdir(new VirtualPath("/Directory1/SubDirectory1"));
+        fileSystem.mkdir(new VirtualPath("/Directory1/SubDirectory1/SubSubDirectory"));
+        fileSystem.mkdir(new VirtualPath("/Directory1/SubDirectory2"));
+        fileSystem.mkdir(new VirtualPath("/Directory2"));
+        fileSystem.mkdir(new VirtualPath("/Directory2/SubDirectory3"));
+        fileSystem.mkdir(new VirtualPath("/Directory2/SubDirectory4"));
+    }
 
     @Before
     public void setup() throws FtpException {
         User user = createUser();
-        FileSystemFactory fileSystemFactory = new VirtualFileSystemFactory();
+        FileSystemFactory fileSystemFactory = new VirtualFileSystemFactory(fileSystem);
         fileSystemView = fileSystemFactory.createFileSystemView(user);
     }
 
@@ -57,11 +72,11 @@ public class TestVirtualFileSystemView {
     public void testChangeToAnotherDirectory() throws FtpException {
 
         // WHEN
-        fileSystemView.changeWorkingDirectory("/ghi");
+        fileSystemView.changeWorkingDirectory("/Directory1");
 
         // THEN
         assertHomeDirectory("/");
-        assertCurrentDirectory("/ghi");
+        assertCurrentDirectory("/Directory1");
     }
 
     @Test
@@ -100,20 +115,20 @@ public class TestVirtualFileSystemView {
     @Test
     public void testChangeToSameDirectoryNonRoot() throws FtpException {
         // GIVEN
-        fileSystemView.changeWorkingDirectory("/ghi");
+        fileSystemView.changeWorkingDirectory("/Directory1");
 
         // WHEN
         fileSystemView.changeWorkingDirectory(".");
 
         // THEN
         assertHomeDirectory("/");
-        assertCurrentDirectory("/ghi");
+        assertCurrentDirectory("/Directory1");
     }
 
     @Test
     public void testChangeToParentDirectory() throws FtpException {
         // GIVEN
-        fileSystemView.changeWorkingDirectory("/ghi");
+        fileSystemView.changeWorkingDirectory("/Directory1");
 
         // WHEN
         fileSystemView.changeWorkingDirectory("..");
@@ -126,15 +141,52 @@ public class TestVirtualFileSystemView {
     @Test
     public void testChangeToParentDirectoryNonRoot() throws FtpException {
         // GIVEN
-        fileSystemView.changeWorkingDirectory("/ghi");
-        fileSystemView.changeWorkingDirectory("/jkl");
+        fileSystemView.changeWorkingDirectory("/Directory1");
+        fileSystemView.changeWorkingDirectory("SubDirectory1");
 
         // WHEN
         fileSystemView.changeWorkingDirectory("..");
 
         // THEN
         assertHomeDirectory("/");
-        assertCurrentDirectory("/ghi");
+        assertCurrentDirectory("/Directory1");
+    }
+
+    @Test
+    public void testChangeToNonExistentDirectory() throws FtpException {
+        // GIVEN
+
+        // WHEN
+        boolean changeDirectoryResult = fileSystemView.changeWorkingDirectory("/Directory2/SubDirectory3/SubSubDirectory");
+
+        // THEN
+        assertFalse(changeDirectoryResult);
+        assertHomeDirectory("/");
+        assertCurrentDirectory("/");
+    }
+
+    @Test
+    public void testGetFileAbsolute() throws FtpException {
+        // GIVEN
+        fileSystemView.changeWorkingDirectory("/Directory1/SubDirectory1");
+
+        // WHEN
+        FtpFile file = fileSystemView.getFile("/Directory2/SubDirectory3");
+
+        // THEN
+        assertEquals("/Directory2/SubDirectory3", file.getAbsolutePath());
+    }
+
+    @Test
+    public void testGetFileNonAbsolute() throws FtpException {
+        // GIVEN
+        fileSystemView.changeWorkingDirectory("/Directory1/SubDirectory1");
+
+        // WHEN
+        FtpFile file = fileSystemView.getFile("SubSubDirectory");
+
+        // THEN
+        assertEquals("/Directory1/SubDirectory1/SubSubDirectory", file.getAbsolutePath());
     }
 
     private User createUser() {

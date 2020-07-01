@@ -25,7 +25,6 @@ public class TestNifiFtpServer {
     @Test
     public void test1() throws FtpException {
         //NifiFtpServer server = new NifiFtpServer(null, "username", "password", 2221);
-
     }
 
 }

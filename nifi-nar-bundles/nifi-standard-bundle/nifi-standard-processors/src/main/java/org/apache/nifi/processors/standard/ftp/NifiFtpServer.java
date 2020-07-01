@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.nifi.processors.standard.ftp;
 
 import org.apache.ftpserver.ConnectionConfig;
@@ -33,8 +32,10 @@ import org.apache.ftpserver.command.impl.EPRT;
 import org.apache.ftpserver.command.impl.EPSV;
 import org.apache.ftpserver.command.impl.FEAT;
 import org.apache.ftpserver.command.impl.LIST;
+import org.apache.ftpserver.command.impl.MDTM;
 import org.apache.ftpserver.command.impl.MKD;
 import org.apache.ftpserver.command.impl.MLSD;
+import org.apache.ftpserver.command.impl.MLST;
 import org.apache.ftpserver.command.impl.MODE;
 import org.apache.ftpserver.command.impl.NLST;
 import org.apache.ftpserver.command.impl.NOOP;
@@ -47,11 +48,7 @@ import org.apache.ftpserver.command.impl.PROT;
 import org.apache.ftpserver.command.impl.PWD;
 import org.apache.ftpserver.command.impl.QUIT;
 import org.apache.ftpserver.command.impl.REIN;
-import org.apache.ftpserver.command.impl.REST;
-import org.apache.ftpserver.command.impl.RETR;
 import org.apache.ftpserver.command.impl.RMD;
-import org.apache.ftpserver.command.impl.RNFR;
-import org.apache.ftpserver.command.impl.RNTO;
 import org.apache.ftpserver.command.impl.SITE;
 import org.apache.ftpserver.command.impl.SITE_DESCUSER;
 import org.apache.ftpserver.command.impl.SITE_HELP;
@@ -60,7 +57,6 @@ import org.apache.ftpserver.command.impl.SITE_WHO;
 import org.apache.ftpserver.command.impl.SITE_ZONE;
 import org.apache.ftpserver.command.impl.SIZE;
 import org.apache.ftpserver.command.impl.STAT;
-import org.apache.ftpserver.command.impl.STOU;
 import org.apache.ftpserver.command.impl.STRU;
 import org.apache.ftpserver.command.impl.SYST;
 import org.apache.ftpserver.command.impl.TYPE;
@@ -84,6 +80,7 @@ public class NifiFtpServer {
 
     private final FtpServerFactory serverFactory = new FtpServerFactory();
     private final FtpServer server;
+    private final VirtualFileSystem fileSystem = new VirtualFileSystem();
     private final AtomicReference<ProcessSessionFactory> sessionFactoryReference;
     private final int port;
     private final String username;
@@ -96,7 +93,7 @@ public class NifiFtpServer {
         this.password = password;
         this.port = port;
 
-        serverFactory.setFileSystem(new VirtualFileSystemFactory());
+        serverFactory.setFileSystem(new VirtualFileSystemFactory(fileSystem));
         serverFactory.setCommandFactory(createCommandFactory(createCommandMap()));
         boolean anonymousLoginEnabled = (this.username == null);
         serverFactory.setConnectionConfig(createConnectionConfig(anonymousLoginEnabled));
@@ -174,6 +171,8 @@ public class NifiFtpServer {
         commandMap.put("HELP", new FtpCommandHELP());
         commandMap.put("LIST", new LIST());
         commandMap.put("MFMT", new FtpCommandMFMT());
+        commandMap.put("MDTM", new MDTM());
+        commandMap.put("MLST", new MLST());
         commandMap.put("MKD", new MKD());
         commandMap.put("MLSD", new MLSD());
         commandMap.put("MODE", new MODE());
@@ -188,11 +187,11 @@ public class NifiFtpServer {
         commandMap.put("PWD", new PWD());
         commandMap.put("QUIT", new QUIT());
         commandMap.put("REIN", new REIN());
-        commandMap.put("REST", new REST());
-        commandMap.put("RETR", new RETR());
+        commandMap.put("REST", new FtpCommandREST());
+        commandMap.put("RETR", new FtpCommandRETR());
         commandMap.put("RMD", new RMD());
-        commandMap.put("RNFR", new RNFR());
-        commandMap.put("RNTO", new RNTO());
+        //commandMap.put("RNFR", new RNFR());
+        //commandMap.put("RNTO", new RNTO());
         commandMap.put("SITE", new SITE());
         commandMap.put("SIZE", new SIZE());
         commandMap.put("SITE_DESCUSER", new SITE_DESCUSER());
@@ -203,7 +202,7 @@ public class NifiFtpServer {
 
         commandMap.put("STAT", new STAT());
         commandMap.put("STOR", new FtpCommandSTOR(sessionFactoryReference));
-        commandMap.put("STOU", new STOU());
+        commandMap.put("STOU", new FtpCommandSTOR(sessionFactoryReference));
         commandMap.put("STRU", new STRU());
         commandMap.put("SYST", new SYST());
         commandMap.put("TYPE", new TYPE());
