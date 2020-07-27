@@ -14,23 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.standard.ftp;
+package org.apache.nifi.processors.standard.ftp.filesystem;
 
-import org.apache.ftpserver.command.AbstractCommand;
-import org.apache.ftpserver.ftplet.DefaultFtpReply;
-import org.apache.ftpserver.ftplet.FtpReply;
-import org.apache.ftpserver.ftplet.FtpRequest;
-import org.apache.ftpserver.impl.FtpIoSession;
-import org.apache.ftpserver.impl.FtpServerContext;
+import org.apache.ftpserver.ftplet.FileSystemFactory;
+import org.apache.ftpserver.ftplet.FileSystemView;
+import org.apache.ftpserver.ftplet.User;
 
-import java.io.IOException;
+public class VirtualFileSystemFactory implements FileSystemFactory {
 
-public class FtpCommandDELE extends AbstractCommand {
+    private VirtualFileSystem fileSystem;
+
+    public VirtualFileSystemFactory(VirtualFileSystem fileSystem) {
+        this.fileSystem = fileSystem;
+    }
+
     @Override
-    public void execute(FtpIoSession session, FtpServerContext context, FtpRequest request) throws IOException {
-        // reset state variables
-        session.resetState();
-
-        session.write(new DefaultFtpReply(FtpReply.REPLY_502_COMMAND_NOT_IMPLEMENTED, "Deletion of file system entries is not supported."));
+    public FileSystemView createFileSystemView(User user) {
+        return new VirtualFileSystemView(user, fileSystem);
     }
 }

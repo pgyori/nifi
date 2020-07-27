@@ -1,5 +1,6 @@
 package org.apache.nifi.processors.standard.ftp;
 
+import org.apache.nifi.processors.standard.ftp.filesystem.VirtualPath;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

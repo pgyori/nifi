@@ -24,6 +24,10 @@ import org.apache.ftpserver.ftplet.FtpFile;
 import org.apache.ftpserver.ftplet.User;
 import org.apache.ftpserver.usermanager.impl.BaseUser;
 import org.apache.ftpserver.usermanager.impl.WritePermission;
+import org.apache.nifi.processors.standard.ftp.filesystem.DefaultVirtualFileSystem;
+import org.apache.nifi.processors.standard.ftp.filesystem.VirtualFileSystem;
+import org.apache.nifi.processors.standard.ftp.filesystem.VirtualFileSystemFactory;
+import org.apache.nifi.processors.standard.ftp.filesystem.VirtualPath;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -40,7 +44,7 @@ public class TestVirtualFileSystemView {
 
     @BeforeClass
     public static void setupVirtualFileSystem() {
-        fileSystem = new VirtualFileSystem();
+        fileSystem = new DefaultVirtualFileSystem();
         fileSystem.mkdir(new VirtualPath("/Directory1"));
         fileSystem.mkdir(new VirtualPath("/Directory1/SubDirectory1"));
         fileSystem.mkdir(new VirtualPath("/Directory1/SubDirectory1/SubSubDirectory"));

@@ -17,6 +17,10 @@
 package org.apache.nifi.processors.standard.ftp;
 
 
+import org.apache.nifi.processors.standard.ftp.filesystem.DefaultVirtualFileSystem;
+import org.apache.nifi.processors.standard.ftp.filesystem.VirtualFileSystem;
+import org.apache.nifi.processors.standard.ftp.filesystem.VirtualFtpFile;
+import org.apache.nifi.processors.standard.ftp.filesystem.VirtualPath;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,7 +44,7 @@ public class TestVirtualFileSystem {
     }
 
     private void setupVirtualDirectoryStructure() {
-        fileSystem = new VirtualFileSystem();
+        fileSystem = new DefaultVirtualFileSystem();
         fileSystem.mkdir(new VirtualPath("/Directory1"));
         fileSystem.mkdir(new VirtualPath("/Directory1/SubDirectory1"));
         fileSystem.mkdir(new VirtualPath("/Directory1/SubDirectory1/SubSubDirectory"));

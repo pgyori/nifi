@@ -19,12 +19,12 @@ package org.apache.nifi.processors.standard.ftp;
 import org.apache.ftpserver.ConnectionConfig;
 import org.apache.ftpserver.ConnectionConfigFactory;
 import org.apache.ftpserver.FtpServer;
+import org.apache.ftpserver.FtpServerConfigurationException;
 import org.apache.ftpserver.FtpServerFactory;
 import org.apache.ftpserver.command.Command;
 import org.apache.ftpserver.command.CommandFactory;
 import org.apache.ftpserver.command.CommandFactoryFactory;
 import org.apache.ftpserver.command.impl.ABOR;
-import org.apache.ftpserver.command.impl.ACCT;
 import org.apache.ftpserver.command.impl.AUTH;
 import org.apache.ftpserver.command.impl.CDUP;
 import org.apache.ftpserver.command.impl.CWD;
@@ -69,6 +69,12 @@ import org.apache.ftpserver.listener.ListenerFactory;
 import org.apache.ftpserver.usermanager.impl.BaseUser;
 import org.apache.ftpserver.usermanager.impl.WritePermission;
 import org.apache.nifi.processor.ProcessSessionFactory;
+import org.apache.nifi.processors.standard.ftp.commands.FtpCommandHELP;
+import org.apache.nifi.processors.standard.ftp.commands.FtpCommandSTOR;
+import org.apache.nifi.processors.standard.ftp.commands.NotSupportedCommand;
+import org.apache.nifi.processors.standard.ftp.filesystem.DefaultVirtualFileSystem;
+import org.apache.nifi.processors.standard.ftp.filesystem.VirtualFileSystem;
+import org.apache.nifi.processors.standard.ftp.filesystem.VirtualFileSystemFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -78,30 +84,27 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class NifiFtpServer {
 
-    private final FtpServerFactory serverFactory = new FtpServerFactory();
+    private Map<String, Command> commandMap = new HashMap<>();
+    private FtpCommandHELP customHelpCommand = new FtpCommandHELP();
+
     private final FtpServer server;
-    private final VirtualFileSystem fileSystem = new VirtualFileSystem();
-    private final AtomicReference<ProcessSessionFactory> sessionFactoryReference;
-    private final int port;
-    private final String username;
-    private final String password;
-    private final String homeDirectory = "/virtual/ftproot";
+    private static final String HOME_DIRECTORY = "/virtual/ftproot";
 
-    public NifiFtpServer(AtomicReference<ProcessSessionFactory> sessionFactoryReference, String username, String password, int port) throws FtpException {
-        this.sessionFactoryReference = sessionFactoryReference;
-        this.username = username;
-        this.password = password;
-        this.port = port;
+    public NifiFtpServer(AtomicReference<ProcessSessionFactory> sessionFactory, String username, String password, String bindAddress, int port)
+            throws FtpException, FtpServerConfigurationException {
+        initializeCommandMap(sessionFactory);
 
+        FtpServerFactory serverFactory = new FtpServerFactory();
+        VirtualFileSystem fileSystem = new DefaultVirtualFileSystem();
         serverFactory.setFileSystem(new VirtualFileSystemFactory(fileSystem));
-        serverFactory.setCommandFactory(createCommandFactory(createCommandMap()));
-        boolean anonymousLoginEnabled = (this.username == null);
+        serverFactory.setCommandFactory(createCommandFactory(commandMap));
+        boolean anonymousLoginEnabled = (username == null);
         serverFactory.setConnectionConfig(createConnectionConfig(anonymousLoginEnabled));
-        serverFactory.addListener("default", createListener(this.port));
+        serverFactory.addListener("default", createListener(bindAddress, port));
         if (anonymousLoginEnabled) {
-            serverFactory.getUserManager().save(createAnonymousUser(this.homeDirectory, Collections.singletonList(new WritePermission())));
+            serverFactory.getUserManager().save(createAnonymousUser(HOME_DIRECTORY, Collections.singletonList(new WritePermission())));
         } else {
-            serverFactory.getUserManager().save(createUser(this.username, this.password, this.homeDirectory, Collections.singletonList(new WritePermission()))); //TODO: can throw an exception that is propagated to @OnScheduled. Proper solution: catch in OnScheduled and wrap in a ProcessException.
+            serverFactory.getUserManager().save(createUser(username, password, HOME_DIRECTORY, Collections.singletonList(new WritePermission()))); //TODO: can throw an exception that is propagated to @OnScheduled. Proper solution: catch in OnScheduled and wrap in a ProcessException.
         }
 
         server = serverFactory.createServer();
@@ -132,8 +135,9 @@ public class NifiFtpServer {
         return connectionConfigFactory.createConnectionConfig();
     }
 
-    private Listener createListener(int port) {
+    private Listener createListener(String bindAddress, int port) throws FtpServerConfigurationException {
         ListenerFactory listenerFactory = new ListenerFactory();
+        listenerFactory.setServerAddress(bindAddress);
         listenerFactory.setPort(port);
         return listenerFactory.createListener();
     }
@@ -155,59 +159,62 @@ public class NifiFtpServer {
         return user;
     }
 
-    private Map<String, Command> createCommandMap() {
-        Map<String, Command> commandMap = new HashMap<>();
+    private void initializeCommandMap(AtomicReference<ProcessSessionFactory> sessionFactory) {
+        addToCommandMap("ABOR", new ABOR());
+        addToCommandMap("ACCT", new NotSupportedCommand("Operation (ACCT) not supported."));
+        addToCommandMap("APPE", new NotSupportedCommand("Operation (APPE) not supported."));
+        addToCommandMap("AUTH", new AUTH());
+        addToCommandMap("CDUP", new CDUP());
+        addToCommandMap("CWD", new CWD());
+        addToCommandMap("DELE", new NotSupportedCommand("Operation (DELE) not supported."));
+        addToCommandMap("EPRT", new EPRT());
+        addToCommandMap("EPSV", new EPSV());
+        addToCommandMap("FEAT", new FEAT());
+        addToCommandMap("HELP", customHelpCommand);
+        addToCommandMap("LIST", new LIST());
+        addToCommandMap("MFMT", new NotSupportedCommand("Operation (MFMT) not supported."));
+        addToCommandMap("MDTM", new MDTM());
+        addToCommandMap("MLST", new MLST());
+        addToCommandMap("MKD", new MKD());
+        addToCommandMap("MLSD", new MLSD());
+        addToCommandMap("MODE", new MODE());
+        addToCommandMap("NLST", new NLST());
+        addToCommandMap("NOOP", new NOOP());
+        addToCommandMap("OPTS", new OPTS());
+        addToCommandMap("PASS", new PASS());
+        addToCommandMap("PASV", new PASV());
+        addToCommandMap("PBSZ", new PBSZ());
+        addToCommandMap("PORT", new PORT());
+        addToCommandMap("PROT", new PROT());
+        addToCommandMap("PWD", new PWD());
+        addToCommandMap("QUIT", new QUIT());
+        addToCommandMap("REIN", new REIN());
+        addToCommandMap("REST", new NotSupportedCommand("Operation (REST) not supported."));
+        addToCommandMap("RETR", new NotSupportedCommand("Operation (RETR) not supported."));
+        addToCommandMap("RMD", new RMD());
+        //addToCommandMap("RNFR", new RNFR());
+        //addToCommandMap("RNTO", new RNTO());
+        addToCommandMap("SITE", new SITE());
+        addToCommandMap("SIZE", new SIZE());
+        addToCommandMap("SITE_DESCUSER", new SITE_DESCUSER());
+        addToCommandMap("SITE_HELP", new SITE_HELP());
+        addToCommandMap("SITE_STAT", new SITE_STAT());
+        addToCommandMap("SITE_WHO", new SITE_WHO());
+        addToCommandMap("SITE_ZONE", new SITE_ZONE());
 
-        commandMap.put("ABOR", new ABOR());
-        commandMap.put("ACCT", new ACCT());
-        commandMap.put("APPE", new FtpCommandAPPE());
-        commandMap.put("AUTH", new AUTH());
-        commandMap.put("CDUP", new CDUP());
-        commandMap.put("CWD", new CWD());
-        commandMap.put("DELE", new FtpCommandDELE());
-        commandMap.put("EPRT", new EPRT());
-        commandMap.put("EPSV", new EPSV());
-        commandMap.put("FEAT", new FEAT());
-        commandMap.put("HELP", new FtpCommandHELP());
-        commandMap.put("LIST", new LIST());
-        commandMap.put("MFMT", new FtpCommandMFMT());
-        commandMap.put("MDTM", new MDTM());
-        commandMap.put("MLST", new MLST());
-        commandMap.put("MKD", new MKD());
-        commandMap.put("MLSD", new MLSD());
-        commandMap.put("MODE", new MODE());
-        commandMap.put("NLST", new NLST());
-        commandMap.put("NOOP", new NOOP());
-        commandMap.put("OPTS", new OPTS());
-        commandMap.put("PASS", new PASS());
-        commandMap.put("PASV", new PASV());
-        commandMap.put("PBSZ", new PBSZ());
-        commandMap.put("PORT", new PORT());
-        commandMap.put("PROT", new PROT());
-        commandMap.put("PWD", new PWD());
-        commandMap.put("QUIT", new QUIT());
-        commandMap.put("REIN", new REIN());
-        commandMap.put("REST", new FtpCommandREST());
-        commandMap.put("RETR", new FtpCommandRETR());
-        commandMap.put("RMD", new RMD());
-        //commandMap.put("RNFR", new RNFR());
-        //commandMap.put("RNTO", new RNTO());
-        commandMap.put("SITE", new SITE());
-        commandMap.put("SIZE", new SIZE());
-        commandMap.put("SITE_DESCUSER", new SITE_DESCUSER());
-        commandMap.put("SITE_HELP", new SITE_HELP());
-        commandMap.put("SITE_STAT", new SITE_STAT());
-        commandMap.put("SITE_WHO", new SITE_WHO());
-        commandMap.put("SITE_ZONE", new SITE_ZONE());
+        addToCommandMap("STAT", new STAT());
+        addToCommandMap("STOR", new FtpCommandSTOR(sessionFactory));
+        addToCommandMap("STOU", new FtpCommandSTOR(sessionFactory));
+        addToCommandMap("STRU", new STRU());
+        addToCommandMap("SYST", new SYST());
+        addToCommandMap("TYPE", new TYPE());
+        addToCommandMap("USER", new USER());
+    }
 
-        commandMap.put("STAT", new STAT());
-        commandMap.put("STOR", new FtpCommandSTOR(sessionFactoryReference));
-        commandMap.put("STOU", new FtpCommandSTOR(sessionFactoryReference));
-        commandMap.put("STRU", new STRU());
-        commandMap.put("SYST", new SYST());
-        commandMap.put("TYPE", new TYPE());
-        commandMap.put("USER", new USER());
-
-        return commandMap;
+    private void addToCommandMap(String command, Command instance) {
+        commandMap.put(command, instance);
+        if (!(instance instanceof NotSupportedCommand)) {
+            customHelpCommand.addCommand(command);
+        }
     }
 }

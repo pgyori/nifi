@@ -1,4 +1,4 @@
-package org.apache.nifi.processors.standard.ftp;
+package org.apache.nifi.processors.standard.ftp.filesystem;
 
 import java.io.File;
 import java.nio.file.Path;

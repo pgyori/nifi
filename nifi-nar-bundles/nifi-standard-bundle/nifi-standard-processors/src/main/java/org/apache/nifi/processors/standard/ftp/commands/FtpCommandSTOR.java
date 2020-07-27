@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.standard.ftp;
+package org.apache.nifi.processors.standard.ftp.commands;
 
 import org.apache.ftpserver.command.AbstractCommand;
 import org.apache.ftpserver.ftplet.DataConnection;
@@ -35,6 +35,7 @@ import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.ProcessSessionFactory;
 import org.apache.nifi.processors.standard.ListenFTP;
+import org.apache.nifi.processors.standard.ftp.FtpNegativeCompletionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,10 +48,10 @@ import java.util.concurrent.atomic.AtomicReference;
 public class FtpCommandSTOR extends AbstractCommand {
 
     private final Logger LOG = LoggerFactory.getLogger(FtpCommandSTOR.class);
-    private final AtomicReference<ProcessSessionFactory> sessionFactoryReference;
+    private final AtomicReference<ProcessSessionFactory> sessionFactory;
 
-    public FtpCommandSTOR(final AtomicReference<ProcessSessionFactory> sessionFactoryReference) {
-        this.sessionFactoryReference = sessionFactoryReference;
+    public FtpCommandSTOR(final AtomicReference<ProcessSessionFactory> sessionFactory) {
+        this.sessionFactory = sessionFactory;
     }
 
     /**
@@ -78,7 +79,7 @@ public class FtpCommandSTOR extends AbstractCommand {
     private void executeCommand(FtpIoSession ftpSession, FtpServerContext context, FtpRequest request)
             throws FtpNegativeCompletionException {
 
-        final String fileName = getArgument(request); //TODO: request argument might contain target path as well (already handled in VirtualFtpFile.path.resolve() but double check!)
+        final String fileName = getArgument(request);
 
         checkDataConnection(ftpSession);
 
@@ -117,7 +118,7 @@ public class FtpCommandSTOR extends AbstractCommand {
         try {
             ftpFile = ftpSession.getFileSystemView().getFile(fileName);
         } catch (FtpException e) {
-            LOG.debug("Exception getting file object", e);
+            LOG.error("Exception getting file object", e);
         }
         if (ftpFile == null) {
             throw new FtpNegativeCompletionException(FtpReply.REPLY_550_REQUESTED_ACTION_NOT_TAKEN, "STOR.invalid", fileName, ftpFile);
@@ -143,7 +144,7 @@ public class FtpCommandSTOR extends AbstractCommand {
         try {
             dataConnection = ftpSession.getDataConnection().openConnection();
         } catch (Exception exception) {
-            LOG.debug("Exception getting the input data stream", exception);
+            LOG.error("Exception getting the input data stream", exception);
             throw new FtpNegativeCompletionException(FtpReply.REPLY_425_CANT_OPEN_DATA_CONNECTION,
                     "STOR",
                     ftpFile.getAbsolutePath(),
@@ -178,14 +179,14 @@ public class FtpCommandSTOR extends AbstractCommand {
             processSession.commit();
 
         } catch (SocketException socketException) {
-            LOG.debug("Socket exception during data transfer", socketException);
+            LOG.error("Socket exception during data transfer", socketException);
             processSession.rollback();
             throw new FtpNegativeCompletionException(FtpReply.REPLY_426_CONNECTION_CLOSED_TRANSFER_ABORTED,
                     "STOR",
                     ftpFile.getAbsolutePath(),
                     ftpFile);
         } catch (IOException ioException) {
-            LOG.debug("IOException during data transfer", ioException);
+            LOG.error("IOException during data transfer", ioException);
             processSession.rollback();
             throw new FtpNegativeCompletionException(FtpReply.REPLY_551_REQUESTED_ACTION_ABORTED_PAGE_TYPE_UNKNOWN,
                     "STOR",
@@ -206,15 +207,14 @@ public class FtpCommandSTOR extends AbstractCommand {
     }
 
     private ProcessSession createProcessSession() {
-        final ProcessSessionFactory processSessionFactory = getProcessSessionFactory();
-        final ProcessSession processSession = processSessionFactory.createSession();
-        return processSession;
+        ProcessSessionFactory processSessionFactory = getProcessSessionFactory();
+        return processSessionFactory.createSession();
     }
 
     private ProcessSessionFactory getProcessSessionFactory() {
         ProcessSessionFactory processSessionFactory;
         do {
-            processSessionFactory = sessionFactoryReference.get();
+            processSessionFactory = sessionFactory.get();
             if (processSessionFactory == null) {
                 try {
                     Thread.sleep(10);

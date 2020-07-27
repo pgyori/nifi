@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.standard.ftp;
+package org.apache.nifi.processors.standard.ftp.commands;
 
 import org.apache.ftpserver.command.AbstractCommand;
 import org.apache.ftpserver.ftplet.DefaultFtpReply;
@@ -23,45 +23,54 @@ import org.apache.ftpserver.ftplet.FtpRequest;
 import org.apache.ftpserver.impl.FtpIoSession;
 import org.apache.ftpserver.impl.FtpServerContext;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 public class FtpCommandHELP extends AbstractCommand {
 
-    private static String DEFAULT_HELP = "The following commands are supported.\n" +
-            "ABOR CDUP CWD HELP LIST\n" +
-            "MKD MODE NLST NOOP PASS PASV PORT PWD\n" +
-            "QUIT REST RETR RMD RNFR RNTO SITE SIZE\n" +
-            "STAT STOR STOU STRU SYST TYPE USER\n" +
-            "End of help.";
-
     private static Map<String, String> COMMAND_SPECIFIC_HELP;
+    private Set<String> availableCommands = new TreeSet<>();
 
     static {
         Map<String, String> commands = new HashMap<>();
         commands.put("ABOR", "Syntax: ABOR");
+        commands.put("APPE", "Syntax: APPE <sp> <pathname>");
+        commands.put("AUTH", "Syntax: AUTH <sp> <security_mechanism>");
         commands.put("CDUP", "Syntax: CDUP");
         commands.put("CWD", "Syntax: CWD <sp> <pathname>");
+        commands.put("DELE", "Syntax: DELE <sp> <pathname>");
         commands.put("EPRT", "Syntax: EPRT<space><d><net-prt><d><net-addr><d><tcp-port><d>");
+        commands.put("EPSV", "Syntax: EPSV");
+        commands.put("FEAT", "Syntax: FEAT");
         commands.put("HELP", "Syntax: HELP [<sp> <string>]");
         commands.put("LIST", "Syntax: LIST [<sp> <pathname>]");
+        commands.put("MDTM", "Syntax: MDTM <sp> <pathname>");
         commands.put("MKD", "Syntax: MKD <sp> <pathname>");
+        commands.put("MLSD", "Syntax: MLSD [<sp> <pathname>]");
+        commands.put("MLST", "Syntax: MLST [<sp> <pathname>]");
         commands.put("MODE", "Syntax: MODE <sp> <mode-code>");
         commands.put("NLST", "Syntax: NLST [<sp> <pathname>]");
         commands.put("NOOP", "Syntax: NOOP");
+        commands.put("OPTS", "Syntax: OPTS <sp> <options>");
         commands.put("PASS", "Syntax: PASS <sp> <password>");
         commands.put("PASV", "Syntax: PASV");
+        commands.put("PBSZ", "Syntax: PBSZ <sp> <buffer_size>");
         commands.put("PORT", "Syntax: PORT <sp> <host-port>");
+        commands.put("PROT", "Syntax: PROT <sp> <protection_level>");
         commands.put("PWD", "Syntax: PWD");
         commands.put("QUIT", "Syntax: QUIT");
-        commands.put("REST", "Syntax: RETR <sp> <marker>");
+        commands.put("REIN", "Syntax: REIN");
+        commands.put("REST", "Syntax: REST <sp> <marker>");
         commands.put("RETR", "Syntax: RETR <sp> <pathname>");
         commands.put("RMD", "Syntax: RMD <sp> <pathname>");
         commands.put("RNFR", "Syntax: RNFR <sp> <pathname>");
         commands.put("RNTO", "Syntax: RNTO <sp> <pathname>");
         commands.put("SITE", "Syntax: SITE <sp> <string>");
+        commands.put("SIZE", "Syntax: SIZE <sp> <pathname>");
+        commands.put("STAT", "Syntax: STAT [<sp> <pathname>]");
         commands.put("STOR", "Syntax: STOR <sp> <pathname>");
         commands.put("STOU", "Syntax: STOU");
         commands.put("SYST", "Syntax: SYST");
@@ -70,12 +79,17 @@ public class FtpCommandHELP extends AbstractCommand {
         COMMAND_SPECIFIC_HELP = Collections.unmodifiableMap(commands);
     }
 
+    public void addCommand(String command) {
+        if (!command.startsWith("SITE_")) { // Parameterized commands of SITE will not appear in the general help.
+            availableCommands.add(command);
+        }
+    }
+
     /**
      * Execute command.
      */
     public void execute(final FtpIoSession session,
-                        final FtpServerContext context, final FtpRequest request)
-            throws IOException {
+                        final FtpServerContext context, final FtpRequest request) {
 
         // reset state variables
         session.resetState();
@@ -88,7 +102,23 @@ public class FtpCommandHELP extends AbstractCommand {
     }
 
     private void sendDefaultHelpMessage(FtpIoSession session) {
-        sendCustomHelpMessage(session, DEFAULT_HELP);
+        sendCustomHelpMessage(session, getDefaultHelpMessage());
+    }
+
+    private String getDefaultHelpMessage() {
+        StringBuffer helpMessage = new StringBuffer("The following commands are supported.\n");
+        int currentNumberOfCommandsInARow = 0;
+        int maxNumberOfCommandsInARow = 5;
+        for (String command : availableCommands) {
+            if (currentNumberOfCommandsInARow == maxNumberOfCommandsInARow) {
+                helpMessage.append("\n");
+                currentNumberOfCommandsInARow = 0;
+            }
+            helpMessage.append(command + ", ");
+            ++currentNumberOfCommandsInARow;
+        }
+        helpMessage.append("\nEnd of help.");
+        return helpMessage.toString();
     }
 
     private void sendCustomHelpMessage(FtpIoSession session, String message) {
@@ -98,7 +128,11 @@ public class FtpCommandHELP extends AbstractCommand {
     private void handleRequestWithArgument(FtpIoSession session, FtpRequest request) {
         // Send command-specific help if available
         String ftpCommand = request.getArgument().toUpperCase();
-        String commandSpecificHelp = COMMAND_SPECIFIC_HELP.get(ftpCommand);
+        String commandSpecificHelp = null;
+
+        if (availableCommands.contains(ftpCommand)) {
+            commandSpecificHelp = COMMAND_SPECIFIC_HELP.get(ftpCommand);
+        }
 
         if (commandSpecificHelp == null) {
             sendDefaultHelpMessage(session);

@@ -16,6 +16,7 @@
  */
 package org.apache.nifi.processors.standard;
 
+import org.apache.ftpserver.FtpServerConfigurationException;
 import org.apache.ftpserver.ftplet.FtpException;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.InputRequirement.Requirement;
@@ -24,17 +25,20 @@ import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.components.ValidationContext;
+import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.processor.AbstractSessionFactoryProcessor;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessSessionFactory;
-import org.apache.nifi.processor.ProcessorInitializationContext;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.processors.standard.ftp.NifiFtpServer;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -44,7 +48,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @InputRequirement(Requirement.INPUT_FORBIDDEN)
 @Tags({"ingest", "ftp", "listen"})
 @CapabilityDescription("Starts an FTP Server and listens on a given port to transform incoming files into FlowFiles. "
-        + "The URI of the Service will be http://{hostname}:{port}. The default port is 2221.")
+        + "The URI of the Service will be ftp://{hostname}:{port}. The default port is 2221.")
 public class ListenFTP extends AbstractSessionFactoryProcessor {
 
     public static final Relationship RELATIONSHIP_SUCCESS = new Relationship.Builder()
@@ -52,14 +56,23 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
             .description("Relationship for successfully received files")
             .build();
 
+    public static final PropertyDescriptor BINDADDRESS = new PropertyDescriptor.Builder() // TODO: catch the FtpServerConfigurationException and write and "Unknown host" message.
+            .name("bind-address")
+            .displayName("Bind Address")
+            .description("The address the FTP server should be bound to. If not provided, the server binds to all available addresses.")
+            .required(false)
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
+            .build();
+
     public static final PropertyDescriptor PORT = new PropertyDescriptor.Builder()
             .name("listening-port")
             .displayName("Listening Port")
-            .description("The Port to listen on for incoming connections")
+            .description("The Port to listen on for incoming connections. On Linux, root privileges are required to use port numbers below 1024.")
             .required(true)
             .defaultValue("2221")
             .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
-            .addValidator(StandardValidators.POSITIVE_INTEGER_VALIDATOR)
+            .addValidator(StandardValidators.PORT_VALIDATOR)
             .build();
 
     public static final PropertyDescriptor USERNAME = new PropertyDescriptor.Builder()
@@ -70,8 +83,7 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
                     "If no username is specified, anonymous connections will be permitted.")
             .required(false)
             .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
-            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-            .sensitive(true)
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
             .build();
 
     public static final PropertyDescriptor PASSWORD = new PropertyDescriptor.Builder()
@@ -81,45 +93,51 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
                     "The password provided by the client trying to log in to the FTP server will be checked against this password.")
             .required(false)
             .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
-            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
             .sensitive(true)
             .build();
 
+    private static final List<PropertyDescriptor> PROPERTIES = Collections.unmodifiableList(Arrays.asList(
+            BINDADDRESS,
+            PORT,
+            USERNAME,
+            PASSWORD
+    ));
+
+    private static final Set<Relationship> RELATIONSHIPS = Collections.unmodifiableSet(new HashSet<>(Collections.singletonList(
+            RELATIONSHIP_SUCCESS
+    )));
+
     private volatile NifiFtpServer ftpServer;
-    private Set<Relationship> relationships;
-    private List<PropertyDescriptor> properties;
-    private final AtomicReference<ProcessSessionFactory> sessionFactoryReference = new AtomicReference<>();
-
-    @Override
-    protected void init(ProcessorInitializationContext context) {
-        Set<Relationship> relationships = new HashSet<>();
-        relationships.add(RELATIONSHIP_SUCCESS);
-        this.relationships = Collections.unmodifiableSet(relationships);
-
-        List<PropertyDescriptor> propertyDescriptors = new ArrayList<>();
-        propertyDescriptors.add(PORT);
-        propertyDescriptors.add(USERNAME);
-        propertyDescriptors.add(PASSWORD);
-        properties = Collections.unmodifiableList(propertyDescriptors);
-    }
+    private final AtomicReference<ProcessSessionFactory> sessionFactory = new AtomicReference<>();
 
     @Override
     protected List<PropertyDescriptor> getSupportedPropertyDescriptors() {
-        return properties;
+        return PROPERTIES;
+    }
+
+    @Override
+    public Set<Relationship> getRelationships() {
+        return RELATIONSHIPS;
     }
 
     @OnScheduled
-    public void startFtpServer(ProcessContext context) throws FtpException {
+    public void startFtpServer(ProcessContext context) {
         String username = context.getProperty(USERNAME).evaluateAttributeExpressions().getValue();
         String password = context.getProperty(PASSWORD).evaluateAttributeExpressions().getValue();
-        int port = Integer.parseInt(context.getProperty(PORT).evaluateAttributeExpressions().getValue());
-        ftpServer = new NifiFtpServer(sessionFactoryReference, username, password, port);//TODO: create custom validator for password!=null (also check if it comes from var registry)
+        String bindAddress = context.getProperty(BINDADDRESS).evaluateAttributeExpressions().getValue();
+        int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
 
         try {
-            ftpServer.start();
+            ftpServer = new NifiFtpServer(sessionFactory, username, password, bindAddress, port);
+            ftpServer.start(); // TODO: do all server exceptions surface here?
+        } catch (FtpServerConfigurationException configurationException) {
+            getLogger().error(String.format("Cannot bind to the provided %s. ", BINDADDRESS.getDisplayName()), configurationException); // TODO: do we need a ProcessException?
         } catch (FtpException ftpException) {
             stopFtpServer();
-            throw ftpException;
+            getLogger().error("FTP server could not be started. ", ftpException);
+        } finally {
+            updateScheduledFalse(); // TODO: does not put the processor to stopped state.
         }
     }
 
@@ -132,13 +150,54 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
 
     @Override
     public void onTrigger(ProcessContext context, ProcessSessionFactory sessionFactory) throws ProcessException {
-        sessionFactoryReference.compareAndSet(null, sessionFactory);
+        this.sessionFactory.compareAndSet(null, sessionFactory);
         context.yield();
     }
 
     @Override
-    public Set<Relationship> getRelationships() {
-        return relationships;
+    protected Collection<ValidationResult> customValidate(ValidationContext context) {
+        List<ValidationResult> results = new ArrayList<>(2);
+        String username = context.getProperty(USERNAME).evaluateAttributeExpressions().getValue();
+        String password = context.getProperty(PASSWORD).evaluateAttributeExpressions().getValue();
+
+        if ((username == null) && (password != null)) {
+            results.add(usernameOrPasswordIsNull(USERNAME, PASSWORD));
+        } else if ((username != null) && (password == null)) {
+            results.add(usernameOrPasswordIsNull(PASSWORD, USERNAME));
+        } else if ((username != null) && (password != null)) {
+            validateAgainstEmptyString(username, USERNAME, results);
+            validateAgainstEmptyString(password, PASSWORD, results);
+        }
+        return results;
+    }
+
+    private ValidationResult usernameOrPasswordIsNull(PropertyDescriptor nullProperty, PropertyDescriptor nonNullProperty) {
+        String explanation = String.format("'%s' and '%s' should either both be provided or none of them", nullProperty.getDisplayName(), nonNullProperty.getDisplayName());
+        return createValidationResult(nullProperty.getDisplayName(), explanation);
+    }
+
+    private void validateAgainstEmptyString(String propertyValue, PropertyDescriptor property, Collection<ValidationResult> validationResults) {
+        if (propertyValue.isBlank()) {
+            if (propertyValue.isEmpty()) {
+                validationResults.add(propertyIsEmptyString(property));
+            } else {
+                validationResults.add(propertyContainsOnlyWhitespace(property));
+            }
+        }
+    }
+
+    private ValidationResult propertyIsEmptyString(PropertyDescriptor property) {
+        String explanation = String.format("'%s' cannot be an empty string", property.getDisplayName());
+        return createValidationResult(property.getDisplayName(), explanation);
+    }
+
+    private ValidationResult propertyContainsOnlyWhitespace(PropertyDescriptor property) {
+        String explanation = String.format("'%s' must contain at least one non-whitespace character", property.getDisplayName());
+        return createValidationResult(property.getDisplayName(), explanation);
+    }
+
+    private ValidationResult createValidationResult(String subject, String explanation) {
+        return new ValidationResult.Builder().subject(subject).valid(false).explanation(explanation).build();
     }
 
 }

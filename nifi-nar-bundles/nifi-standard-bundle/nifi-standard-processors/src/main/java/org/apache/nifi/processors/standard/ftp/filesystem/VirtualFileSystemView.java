@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.standard.ftp;
+package org.apache.nifi.processors.standard.ftp.filesystem;
 
 import org.apache.ftpserver.ftplet.FileSystemView;
 import org.apache.ftpserver.ftplet.FtpFile;
@@ -25,17 +25,14 @@ import org.slf4j.LoggerFactory;
 public class VirtualFileSystemView implements FileSystemView {
 
     private final Logger LOG = LoggerFactory.getLogger(VirtualFileSystemView.class);
-    private VirtualPath currentDirectory;
-    private final User user; //TODO: remove if not needed
+    private VirtualPath currentDirectory = new VirtualPath("/");
     private VirtualFileSystem fileSystem;
 
-    protected VirtualFileSystemView(User user, VirtualFileSystem fileSystem) throws IllegalArgumentException {
+    public VirtualFileSystemView(User user, VirtualFileSystem fileSystem) throws IllegalArgumentException {
         if (user == null || fileSystem == null) {
             throw new IllegalArgumentException("User and filesystem cannot be null.");
         } else {
-            this.user = user;
-            currentDirectory = new VirtualPath("/");
-            LOG.debug("Virtual filesystem view created for user \"{}\"", user.getName());
+            LOG.info("Virtual filesystem view created for user \"{}\"", user.getName());
             this.fileSystem = fileSystem;
         }
     }
@@ -68,8 +65,8 @@ public class VirtualFileSystemView implements FileSystemView {
     }
 
     @Override
-    public boolean isRandomAccessible() throws UnsupportedOperationException {
-        throw new UnsupportedOperationException("VirtualFileSystemView.isRandomAccessible()");
+    public boolean isRandomAccessible() {
+        return false;
     }
 
     @Override

@@ -14,35 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.standard.ftp;
+package org.apache.nifi.processors.standard.ftp.commands;
 
 import org.apache.ftpserver.command.AbstractCommand;
-import org.apache.ftpserver.command.impl.REST;
 import org.apache.ftpserver.ftplet.DefaultFtpReply;
 import org.apache.ftpserver.ftplet.FtpReply;
 import org.apache.ftpserver.ftplet.FtpRequest;
 import org.apache.ftpserver.impl.FtpIoSession;
 import org.apache.ftpserver.impl.FtpServerContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-public class FtpCommandREST extends AbstractCommand {
+public class NotSupportedCommand extends AbstractCommand {
 
-    private final Logger LOG = LoggerFactory.getLogger(FtpCommandREST.class);
+    private String message;
 
-    /**
-     * Execute command
-     */
-    public void execute(final FtpIoSession session,
-                        final FtpServerContext context, final FtpRequest request)
-            throws IOException {
+    public NotSupportedCommand(String message) {
+        this.message = message;
+    }
 
+    @Override
+    public void execute(FtpIoSession session, FtpServerContext context, FtpRequest request) {
         // reset state variables
         session.resetState();
 
-        session.write(new DefaultFtpReply(FtpReply.REPLY_502_COMMAND_NOT_IMPLEMENTED, "Operation (REST) not supported."));
+        session.write(new DefaultFtpReply(FtpReply.REPLY_502_COMMAND_NOT_IMPLEMENTED, message));
     }
-
 }

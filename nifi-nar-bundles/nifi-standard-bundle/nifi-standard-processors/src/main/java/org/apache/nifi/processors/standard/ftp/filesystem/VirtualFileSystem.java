@@ -14,23 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.standard.ftp;
+package org.apache.nifi.processors.standard.ftp.filesystem;
 
-import org.apache.ftpserver.command.AbstractCommand;
-import org.apache.ftpserver.ftplet.DefaultFtpReply;
-import org.apache.ftpserver.ftplet.FtpReply;
-import org.apache.ftpserver.ftplet.FtpRequest;
-import org.apache.ftpserver.impl.FtpIoSession;
-import org.apache.ftpserver.impl.FtpServerContext;
+import java.util.List;
 
-import java.io.IOException;
+public interface VirtualFileSystem {
 
-public class FtpCommandAPPE extends AbstractCommand {
-    @Override
-    public void execute(FtpIoSession session, FtpServerContext context, FtpRequest request) throws IOException {
-        // reset state variables
-        session.resetState();
+    boolean mkdir(VirtualPath newFile);
 
-        session.write(new DefaultFtpReply(FtpReply.REPLY_502_COMMAND_NOT_IMPLEMENTED, "Operation (APPE) not supported."));
-    }
+    boolean exists(VirtualPath virtualFile);
+
+    boolean delete(VirtualPath virtualFile);
+
+    List<VirtualFtpFile> listChildren(VirtualPath parent);
+
+    int getTotalNumberOfFiles();
+
 }

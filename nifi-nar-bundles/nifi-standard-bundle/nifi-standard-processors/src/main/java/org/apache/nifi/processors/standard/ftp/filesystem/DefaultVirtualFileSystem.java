@@ -14,20 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.standard.ftp;
+package org.apache.nifi.processors.standard.ftp.filesystem;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public final class VirtualFileSystem {
+public class DefaultVirtualFileSystem implements VirtualFileSystem {
 
     private volatile List<VirtualPath> existingPaths;
 
-    public VirtualFileSystem() {
+    public DefaultVirtualFileSystem() {
         existingPaths = new ArrayList<>();
         existingPaths.add(new VirtualPath("/"));
     }
 
+    @Override
     public synchronized boolean mkdir(VirtualPath newFile) {
         if (existingPaths.contains(newFile)) {
             return false;
@@ -37,10 +38,12 @@ public final class VirtualFileSystem {
         }
     }
 
+    @Override
     public synchronized boolean exists(VirtualPath virtualFile) {
         return existingPaths.contains(virtualFile);
     }
 
+    @Override
     public synchronized boolean delete(VirtualPath virtualFile) {
         VirtualPath root = new VirtualPath("/");
         if (virtualFile.equals(root)) { // Root cannot be deleted
@@ -66,6 +69,7 @@ public final class VirtualFileSystem {
         }
     }
 
+    @Override
     public synchronized List<VirtualFtpFile> listChildren(VirtualPath parent) {
         List<VirtualFtpFile> children = new ArrayList<>();
         VirtualPath root = new VirtualPath("/");
@@ -91,6 +95,7 @@ public final class VirtualFileSystem {
         return children;
     }
 
+    @Override
     public synchronized int getTotalNumberOfFiles() {
         return existingPaths.size();
     }

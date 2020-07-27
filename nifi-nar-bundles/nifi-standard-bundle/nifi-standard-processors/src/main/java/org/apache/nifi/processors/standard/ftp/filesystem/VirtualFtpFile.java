@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.standard.ftp;
+package org.apache.nifi.processors.standard.ftp.filesystem;
 
 import org.apache.ftpserver.ftplet.FtpFile;
 
@@ -29,7 +29,7 @@ public class VirtualFtpFile implements FtpFile {
     private VirtualPath path;
     private VirtualFileSystem fileSystem;
 
-    protected VirtualFtpFile(VirtualPath path, VirtualFileSystem fileSystem) throws IllegalArgumentException {
+    public VirtualFtpFile(VirtualPath path, VirtualFileSystem fileSystem) throws IllegalArgumentException {
         if (path == null || fileSystem == null) {
             throw new IllegalArgumentException("File path and fileSystem cannot be null");
         }
@@ -54,12 +54,12 @@ public class VirtualFtpFile implements FtpFile {
 
     @Override
     public boolean isDirectory() {
-        return true; //TODO: for now, only directories are handled since files are converted into flowfiles immediately. Double check!
+        return true; // Only directories are handled since files are converted into flowfiles immediately.
     }
 
     @Override
     public boolean isFile() {
-        return false; //TODO: for now, only directories are handled since files are converted into flowfiles immediately. Double check!
+        return false; // Only directories are handled since files are converted into flowfiles immediately.
     }
 
     @Override
@@ -138,12 +138,12 @@ public class VirtualFtpFile implements FtpFile {
     }
 
     @Override
-    public OutputStream createOutputStream(long l) throws IOException,  UnsupportedOperationException {
+    public OutputStream createOutputStream(long l) throws UnsupportedOperationException {
         throw new UnsupportedOperationException("VirtualFtpFile.createOutputStream()");
     }
 
     @Override
-    public InputStream createInputStream(long l) throws IOException,  UnsupportedOperationException {
+    public InputStream createInputStream(long l) throws UnsupportedOperationException {
         throw new UnsupportedOperationException("VirtualFtpFile.createInputStream()");
     }
 
