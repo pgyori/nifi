@@ -16,8 +16,6 @@
  */
 package org.apache.nifi.processors.standard;
 
-import org.apache.ftpserver.FtpServerConfigurationException;
-import org.apache.ftpserver.ftplet.FtpException;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.InputRequirement.Requirement;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
@@ -56,7 +54,7 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
             .description("Relationship for successfully received files")
             .build();
 
-    public static final PropertyDescriptor BINDADDRESS = new PropertyDescriptor.Builder() // TODO: catch the FtpServerConfigurationException and write and "Unknown host" message.
+    public static final PropertyDescriptor BINDADDRESS = new PropertyDescriptor.Builder()
             .name("bind-address")
             .displayName("Bind Address")
             .description("The address the FTP server should be bound to. If not provided, the server binds to all available addresses.")
@@ -123,21 +121,23 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
 
     @OnScheduled
     public void startFtpServer(ProcessContext context) {
-        String username = context.getProperty(USERNAME).evaluateAttributeExpressions().getValue();
-        String password = context.getProperty(PASSWORD).evaluateAttributeExpressions().getValue();
-        String bindAddress = context.getProperty(BINDADDRESS).evaluateAttributeExpressions().getValue();
-        int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
+        if (ftpServer == null) {
+            String username = context.getProperty(USERNAME).evaluateAttributeExpressions().getValue();
+            String password = context.getProperty(PASSWORD).evaluateAttributeExpressions().getValue();
+            String bindAddress = context.getProperty(BINDADDRESS).evaluateAttributeExpressions().getValue();
+            int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
 
-        try {
-            ftpServer = new NifiFtpServer(sessionFactory, username, password, bindAddress, port);
-            ftpServer.start(); // TODO: do all server exceptions surface here?
-        } catch (FtpServerConfigurationException configurationException) {
-            getLogger().error(String.format("Cannot bind to the provided %s. ", BINDADDRESS.getDisplayName()), configurationException); // TODO: do we need a ProcessException?
-        } catch (FtpException ftpException) {
-            stopFtpServer();
-            getLogger().error("FTP server could not be started. ", ftpException);
-        } finally {
-            updateScheduledFalse(); // TODO: does not put the processor to stopped state.
+            try {
+                ftpServer = new NifiFtpServer(sessionFactory, username, password, bindAddress, port);
+                ftpServer.start();
+            } catch (Exception exception) {
+                String errorMessage = "FTP server could not be started. ";
+                getLogger().error(errorMessage, exception);
+                stopFtpServer();
+                throw new ProcessException(errorMessage, exception);
+            }
+        } else {
+            getLogger().warn("Ftp server already started.");
         }
     }
 
@@ -145,6 +145,7 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
     public void stopFtpServer() {
         if (ftpServer != null && !ftpServer.isStopped()) {
             ftpServer.stop();
+            ftpServer = null;
         }
     }
 

@@ -104,7 +104,7 @@ public class NifiFtpServer {
         if (anonymousLoginEnabled) {
             serverFactory.getUserManager().save(createAnonymousUser(HOME_DIRECTORY, Collections.singletonList(new WritePermission())));
         } else {
-            serverFactory.getUserManager().save(createUser(username, password, HOME_DIRECTORY, Collections.singletonList(new WritePermission()))); //TODO: can throw an exception that is propagated to @OnScheduled. Proper solution: catch in OnScheduled and wrap in a ProcessException.
+            serverFactory.getUserManager().save(createUser(username, password, HOME_DIRECTORY, Collections.singletonList(new WritePermission())));
         }
 
         server = serverFactory.createServer();

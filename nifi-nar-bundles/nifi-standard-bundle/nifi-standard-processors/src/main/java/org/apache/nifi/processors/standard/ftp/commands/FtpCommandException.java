@@ -14,18 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.standard.ftp;
+package org.apache.nifi.processors.standard.ftp.commands;
 
 import org.apache.ftpserver.ftplet.FtpFile;
 
-public class FtpNegativeCompletionException extends Exception {
+public class FtpCommandException extends Exception {
 
     private final int ftpReturnCode;
     private final String subId;
     private final String basicMessage;
     private final FtpFile ftpFile;
 
-    public FtpNegativeCompletionException(int ftpReturnCode, String subId, String basicMessage, FtpFile ftpFile) {
+    public FtpCommandException(int ftpReturnCode, String subId, String basicMessage, FtpFile ftpFile) {
         super(subId);
         this.ftpReturnCode = ftpReturnCode;
         this.subId = subId;

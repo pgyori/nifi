@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 
 public class VirtualFileSystemView implements FileSystemView {
 
-    private final Logger LOG = LoggerFactory.getLogger(VirtualFileSystemView.class);
+    private static final Logger LOG = LoggerFactory.getLogger(VirtualFileSystemView.class);
     private VirtualPath currentDirectory = new VirtualPath("/");
     private VirtualFileSystem fileSystem;
 
