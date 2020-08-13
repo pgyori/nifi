@@ -18,16 +18,16 @@ package org.apache.nifi.processors.standard.ftp.filesystem;
 
 import org.apache.ftpserver.ftplet.FtpFile;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
 public class VirtualFtpFile implements FtpFile {
 
-    private VirtualPath path;
-    private VirtualFileSystem fileSystem;
+    private final VirtualPath path;
+    private final VirtualFileSystem fileSystem;
 
     public VirtualFtpFile(VirtualPath path, VirtualFileSystem fileSystem) throws IllegalArgumentException {
         if (path == null || fileSystem == null) {
@@ -84,12 +84,12 @@ public class VirtualFtpFile implements FtpFile {
 
     @Override
     public String getOwnerName() {
-        return "Owner"; //TODO: used in NLST -> LISTFileFormater class
+        return "Owner";
     }
 
     @Override
     public String getGroupName() {
-        return "Group"; //TODO: used in NLST -> LISTFileFormater class
+        return "Group";
     }
 
     @Override
@@ -134,7 +134,12 @@ public class VirtualFtpFile implements FtpFile {
 
     @Override
     public List<? extends FtpFile> listFiles() {
-        return fileSystem.listChildren(path);
+        List<VirtualPath> paths = fileSystem.listChildren(path);
+        List<VirtualFtpFile> files = new ArrayList<>();
+        for (VirtualPath path : paths) {
+            files.add(new VirtualFtpFile(path, fileSystem));
+        }
+        return files;
     }
 
     @Override

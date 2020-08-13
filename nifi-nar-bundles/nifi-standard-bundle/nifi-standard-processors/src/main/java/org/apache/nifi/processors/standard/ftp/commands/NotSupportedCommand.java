@@ -23,8 +23,6 @@ import org.apache.ftpserver.ftplet.FtpRequest;
 import org.apache.ftpserver.impl.FtpIoSession;
 import org.apache.ftpserver.impl.FtpServerContext;
 
-import java.io.IOException;
-
 public class NotSupportedCommand extends AbstractCommand {
 
     private String message;

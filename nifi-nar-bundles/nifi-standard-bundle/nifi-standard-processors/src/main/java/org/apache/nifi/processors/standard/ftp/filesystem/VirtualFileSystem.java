@@ -20,13 +20,15 @@ import java.util.List;
 
 public interface VirtualFileSystem {
 
+    VirtualPath ROOT = new VirtualPath("/");
+
     boolean mkdir(VirtualPath newFile);
 
     boolean exists(VirtualPath virtualFile);
 
     boolean delete(VirtualPath virtualFile);
 
-    List<VirtualFtpFile> listChildren(VirtualPath parent);
+    List<VirtualPath> listChildren(VirtualPath parent);
 
     int getTotalNumberOfFiles();
 

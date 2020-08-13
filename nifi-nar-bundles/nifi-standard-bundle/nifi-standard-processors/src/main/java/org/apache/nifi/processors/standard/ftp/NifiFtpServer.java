@@ -62,13 +62,13 @@ import org.apache.ftpserver.command.impl.SYST;
 import org.apache.ftpserver.command.impl.TYPE;
 import org.apache.ftpserver.command.impl.USER;
 import org.apache.ftpserver.ftplet.Authority;
-import org.apache.ftpserver.ftplet.FtpException;
 import org.apache.ftpserver.ftplet.User;
 import org.apache.ftpserver.listener.Listener;
 import org.apache.ftpserver.listener.ListenerFactory;
 import org.apache.ftpserver.usermanager.impl.BaseUser;
 import org.apache.ftpserver.usermanager.impl.WritePermission;
 import org.apache.nifi.processor.ProcessSessionFactory;
+import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processors.standard.ftp.commands.FtpCommandHELP;
 import org.apache.nifi.processors.standard.ftp.commands.FtpCommandSTOR;
 import org.apache.nifi.processors.standard.ftp.commands.NotSupportedCommand;
@@ -80,38 +80,47 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class NifiFtpServer {
 
-    private Map<String, Command> commandMap = new HashMap<>();
-    private FtpCommandHELP customHelpCommand = new FtpCommandHELP();
+    private final Map<String, Command> commandMap = new HashMap<>();
+    private final FtpCommandHELP customHelpCommand = new FtpCommandHELP();
 
     private final FtpServer server;
     private static final String HOME_DIRECTORY = "/virtual/ftproot";
 
-    public NifiFtpServer(AtomicReference<ProcessSessionFactory> sessionFactory, String username, String password, String bindAddress, int port)
-            throws FtpException, FtpServerConfigurationException {
-        initializeCommandMap(sessionFactory);
+    private NifiFtpServer(Builder builder) throws ProcessException {
+        try {
+            initializeCommandMap(builder.sessionFactory, builder.sessionFactorySetSignal);
 
-        FtpServerFactory serverFactory = new FtpServerFactory();
-        VirtualFileSystem fileSystem = new DefaultVirtualFileSystem();
-        serverFactory.setFileSystem(new VirtualFileSystemFactory(fileSystem));
-        serverFactory.setCommandFactory(createCommandFactory(commandMap));
-        boolean anonymousLoginEnabled = (username == null);
-        serverFactory.setConnectionConfig(createConnectionConfig(anonymousLoginEnabled));
-        serverFactory.addListener("default", createListener(bindAddress, port));
-        if (anonymousLoginEnabled) {
-            serverFactory.getUserManager().save(createAnonymousUser(HOME_DIRECTORY, Collections.singletonList(new WritePermission())));
-        } else {
-            serverFactory.getUserManager().save(createUser(username, password, HOME_DIRECTORY, Collections.singletonList(new WritePermission())));
+            VirtualFileSystem fileSystem = new DefaultVirtualFileSystem();
+            boolean anonymousLoginEnabled = (builder.username == null);
+
+            FtpServerFactory serverFactory = new FtpServerFactory();
+            serverFactory.setFileSystem(new VirtualFileSystemFactory(fileSystem));
+            serverFactory.setCommandFactory(createCommandFactory(commandMap));
+            serverFactory.setConnectionConfig(createConnectionConfig(anonymousLoginEnabled));
+            serverFactory.addListener("default", createListener(builder.bindAddress, builder.port));
+            if (anonymousLoginEnabled) {
+                serverFactory.getUserManager().save(createAnonymousUser(HOME_DIRECTORY, Collections.singletonList(new WritePermission())));
+            } else {
+                serverFactory.getUserManager().save(createUser(builder.username, builder.password, HOME_DIRECTORY, Collections.singletonList(new WritePermission())));
+            }
+            server = serverFactory.createServer();
+        } catch (Exception exception) {
+            throw new ProcessException("FTP server could not be started.", exception);
         }
-
-        server = serverFactory.createServer();
     }
 
-    public void start() throws FtpException {
-        server.start();
+    public void start() throws ProcessException {
+        try {
+            server.start();
+        } catch (Exception exception) {
+            throw new ProcessException("FTP server could not be started.", exception);
+        }
     }
 
     public void stop() {
@@ -159,7 +168,7 @@ public class NifiFtpServer {
         return user;
     }
 
-    private void initializeCommandMap(AtomicReference<ProcessSessionFactory> sessionFactory) {
+    private void initializeCommandMap(AtomicReference<ProcessSessionFactory> sessionFactory, CountDownLatch sessionFactorySetSignal) {
         addToCommandMap("ABOR", new ABOR());
         addToCommandMap("ACCT", new NotSupportedCommand("Operation (ACCT) not supported."));
         addToCommandMap("APPE", new NotSupportedCommand("Operation (APPE) not supported."));
@@ -203,8 +212,8 @@ public class NifiFtpServer {
         addToCommandMap("SITE_ZONE", new SITE_ZONE());
 
         addToCommandMap("STAT", new STAT());
-        addToCommandMap("STOR", new FtpCommandSTOR(sessionFactory));
-        addToCommandMap("STOU", new FtpCommandSTOR(sessionFactory));
+        addToCommandMap("STOR", new FtpCommandSTOR(sessionFactory, sessionFactorySetSignal));
+        addToCommandMap("STOU", new FtpCommandSTOR(sessionFactory, sessionFactorySetSignal));
         addToCommandMap("STRU", new STRU());
         addToCommandMap("SYST", new SYST());
         addToCommandMap("TYPE", new TYPE());
@@ -217,4 +226,50 @@ public class NifiFtpServer {
             customHelpCommand.addCommand(command);
         }
     }
+
+    public static class Builder {
+        private AtomicReference<ProcessSessionFactory> sessionFactory;
+        CountDownLatch sessionFactorySetSignal;
+        private String bindAddress;
+        private int port;
+        private String username;
+        private String password;
+
+        public Builder sessionFactory(AtomicReference<ProcessSessionFactory> sessionFactory) {
+            this.sessionFactory = sessionFactory;
+            return this;
+        }
+
+        public Builder sessionFactorySetSignal(CountDownLatch sessionFactorySetSignal) {
+            Objects.requireNonNull(sessionFactorySetSignal);
+
+            this.sessionFactorySetSignal = sessionFactorySetSignal;
+            return this;
+        }
+
+        public Builder bindAddress(String bindAddress) {
+            this.bindAddress = bindAddress;
+            return this;
+        }
+
+        public Builder port(int port) {
+            this.port = port;
+            return this;
+        }
+
+        public Builder username(String username) {
+            this.username = username;
+            return this;
+        }
+
+        public Builder password(String password) {
+            this.password = password;
+            return this;
+        }
+
+        public NifiFtpServer build() throws ProcessException {
+            return new NifiFtpServer(this);
+        }
+    }
+
 }

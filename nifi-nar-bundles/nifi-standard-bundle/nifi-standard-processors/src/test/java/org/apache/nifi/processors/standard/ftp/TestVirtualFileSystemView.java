@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.nifi.processors.standard.ftp;
 
 import org.apache.ftpserver.ftplet.FileSystemFactory;
@@ -70,6 +69,16 @@ public class TestVirtualFileSystemView {
         // THEN
         assertHomeDirectory("/");
         assertCurrentDirectory("/");
+    }
+
+    @Test
+    public void testTryToMakeRootDirectory() {
+
+        // WHEN
+        boolean directoryCreated = fileSystem.mkdir(VirtualFileSystem.ROOT);
+
+        // THEN
+        assertFalse(directoryCreated);
     }
 
     @Test

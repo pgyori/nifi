@@ -42,15 +42,20 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class FtpCommandSTOR extends AbstractCommand {
 
     private static final Logger LOG = LoggerFactory.getLogger(FtpCommandSTOR.class);
     private final AtomicReference<ProcessSessionFactory> sessionFactory;
+    private final CountDownLatch sessionFactorySetSignal;
 
-    public FtpCommandSTOR(final AtomicReference<ProcessSessionFactory> sessionFactory) {
+    public FtpCommandSTOR(AtomicReference<ProcessSessionFactory> sessionFactory, CountDownLatch sessionFactorySetSignal) {
         this.sessionFactory = sessionFactory;
+        this.sessionFactorySetSignal = sessionFactorySetSignal;
     }
 
     /**
@@ -156,7 +161,13 @@ public class FtpCommandSTOR extends AbstractCommand {
                               final FtpServerContext context, final FtpRequest request, final FtpFile ftpFile)
             throws FtpCommandException {
 
-        final ProcessSession processSession = createProcessSession();
+        final ProcessSession processSession;
+        try {
+            processSession = createProcessSession();
+        } catch (InterruptedException|TimeoutException exception) {
+            LOG.error("ProcessSession could not be acquired, command STOR aborted.", exception);
+            throw new FtpCommandException(FtpReply.REPLY_425_CANT_OPEN_DATA_CONNECTION, null, "File transfer failed.", null);
+        }
         FlowFile flowFile = processSession.create();
         long transferredBytes = 0L;
         try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
@@ -183,10 +194,11 @@ public class FtpCommandSTOR extends AbstractCommand {
             ServerFtpStatistics ftpStat = (ServerFtpStatistics) context.getFtpStatistics();
             ftpStat.setUpload(ftpSession, ftpFile, transferredBytes);
 
-            //TODO: add flowfile attributes
             processSession.putAttribute(flowFile, CoreAttributes.FILENAME.key(), ftpFile.getName());
             processSession.putAttribute(flowFile, CoreAttributes.PATH.key(), getPath(ftpFile));
-            //TODO: provenance event
+
+            processSession.getProvenanceReporter().modifyContent(flowFile);
+
             processSession.transfer(flowFile, ListenFTP.RELATIONSHIP_SUCCESS);
             processSession.commit();
         } catch (Exception exception) {
@@ -206,22 +218,16 @@ public class FtpCommandSTOR extends AbstractCommand {
         return ftpFile.getAbsolutePath().substring(0, endIndex);
     }
 
-    private ProcessSession createProcessSession() {
+    private ProcessSession createProcessSession() throws InterruptedException, TimeoutException {
         ProcessSessionFactory processSessionFactory = getProcessSessionFactory();
         return processSessionFactory.createSession();
     }
 
-    private ProcessSessionFactory getProcessSessionFactory() {
-        ProcessSessionFactory processSessionFactory;
-        do {
-            processSessionFactory = sessionFactory.get();
-            if (processSessionFactory == null) {
-                try {
-                    Thread.sleep(10);
-                } catch (final InterruptedException e) {
-                }
-            }
-        } while (processSessionFactory == null);
-        return processSessionFactory;
+    private ProcessSessionFactory getProcessSessionFactory() throws InterruptedException, TimeoutException {
+        if (sessionFactorySetSignal.await(10000, TimeUnit.MILLISECONDS)) {
+            return sessionFactory.get();
+        } else {
+            throw new TimeoutException("Waiting period for sessionFactory is over.");
+        }
     }
 }

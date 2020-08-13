@@ -18,86 +18,115 @@ package org.apache.nifi.processors.standard.ftp.filesystem;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class DefaultVirtualFileSystem implements VirtualFileSystem {
 
-    private volatile List<VirtualPath> existingPaths;
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final List<VirtualPath> existingPaths;
 
     public DefaultVirtualFileSystem() {
         existingPaths = new ArrayList<>();
-        existingPaths.add(new VirtualPath("/"));
+        existingPaths.add(ROOT);
     }
 
     @Override
-    public synchronized boolean mkdir(VirtualPath newFile) {
-        if (existingPaths.contains(newFile)) {
-            return false;
-        } else {
-            existingPaths.add(newFile);
-            return true;
+    public boolean mkdir(VirtualPath newFile) {
+        lock.writeLock().lock();
+        try {
+            if (existingPaths.contains(newFile)) {
+                return false;
+            } else {
+                if (existingPaths.contains(newFile.getParent())) {
+                    existingPaths.add(newFile);
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
     @Override
-    public synchronized boolean exists(VirtualPath virtualFile) {
-        return existingPaths.contains(virtualFile);
+    public boolean exists(VirtualPath virtualFile) {
+        lock.readLock().lock();
+        try {
+            return existingPaths.contains(virtualFile);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Override
-    public synchronized boolean delete(VirtualPath virtualFile) {
-        VirtualPath root = new VirtualPath("/");
-        if (virtualFile.equals(root)) { // Root cannot be deleted
-            return false;
-        } else if (existingPaths.contains(virtualFile)) {
-            existingPaths.removeIf(e -> isChildOf(virtualFile, e));
-            return true;
-        } else {
+    public boolean delete(VirtualPath virtualFile) {
+        if (virtualFile.equals(ROOT)) { // Root cannot be deleted
             return false;
         }
+
+        lock.writeLock().lock();
+        try {
+            if (existingPaths.contains(virtualFile)) {
+                if (!hasSubDirectories(virtualFile)) {
+                    return existingPaths.remove(virtualFile);
+                }
+            }
+            return false;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private boolean hasSubDirectories(VirtualPath directory) {
+        return existingPaths.stream().anyMatch(e -> isChildOf(directory, e));
     }
 
     private boolean isChildOf(VirtualPath parent, VirtualPath childCandidate) {
-        VirtualPath root = new VirtualPath("/");
-        if (parent.equals(root)) {
-            return !childCandidate.equals(root); // Every file is the child of root except for root itself.
-        } else if (parent.getNameCount() > childCandidate.getNameCount()) { // The parent's absolute path must be shorter
+        if (childCandidate.equals(ROOT)) {
             return false;
-        } else if (parent.getNameCount() == childCandidate.getNameCount()) {
-            return parent.equals(childCandidate);
-        } else {
-            return isChildOf(parent, childCandidate.getParent());
         }
+        return parent.equals(childCandidate.getParent());
     }
 
     @Override
-    public synchronized List<VirtualFtpFile> listChildren(VirtualPath parent) {
-        List<VirtualFtpFile> children = new ArrayList<>();
-        VirtualPath root = new VirtualPath("/");
+    public List<VirtualPath> listChildren(VirtualPath parent) {
+        List<VirtualPath> children = new ArrayList<>();
 
-        if (parent.equals(root)) {
-            for (VirtualPath existingPath : existingPaths) {
-                if (!existingPath.equals(root)) {
-                    if (existingPath.getNameCount() == 1) {
-                        children.add(new VirtualFtpFile(existingPath, this));
+        lock.readLock().lock();
+        try {
+            if (parent.equals(ROOT)) {
+                for (VirtualPath existingPath : existingPaths) {
+                    if (!existingPath.equals(ROOT)) {
+                        if (existingPath.getNameCount() == 1) {
+                            children.add(existingPath);
+                        }
+                    }
+                }
+            } else {
+                int parentNameCount = parent.getNameCount();
+                for (VirtualPath existingPath : existingPaths) {
+                    if ((existingPath.getParent() != null) && existingPath.getParent().equals(parent)) {
+                        if (existingPath.getNameCount() == (parentNameCount + 1)) {
+                            children.add(existingPath);
+                        }
                     }
                 }
             }
-        } else {
-            int parentNameCount = parent.getNameCount();
-            for (VirtualPath existingPath : existingPaths) {
-                if ((existingPath.getParent() != null) && existingPath.getParent().equals(parent)) {
-                    if (existingPath.getNameCount() == (parentNameCount + 1)) {
-                        children.add(new VirtualFtpFile(existingPath, this));
-                    }
-                }
-            }
+        } finally {
+            lock.readLock().unlock();
         }
         return children;
     }
 
     @Override
-    public synchronized int getTotalNumberOfFiles() {
-        return existingPaths.size();
+    public int getTotalNumberOfFiles() {
+        lock.readLock().lock();
+        try {
+            return existingPaths.size();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
 }

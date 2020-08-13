@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 @InputRequirement(Requirement.INPUT_FORBIDDEN)
@@ -54,7 +55,7 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
             .description("Relationship for successfully received files")
             .build();
 
-    public static final PropertyDescriptor BINDADDRESS = new PropertyDescriptor.Builder()
+    public static final PropertyDescriptor BIND_ADDRESS = new PropertyDescriptor.Builder()
             .name("bind-address")
             .displayName("Bind Address")
             .description("The address the FTP server should be bound to. If not provided, the server binds to all available addresses.")
@@ -96,7 +97,7 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
             .build();
 
     private static final List<PropertyDescriptor> PROPERTIES = Collections.unmodifiableList(Arrays.asList(
-            BINDADDRESS,
+            BIND_ADDRESS,
             PORT,
             USERNAME,
             PASSWORD
@@ -107,6 +108,7 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
     )));
 
     private volatile NifiFtpServer ftpServer;
+    private volatile CountDownLatch sessionFactorySetSignal;
     private final AtomicReference<ProcessSessionFactory> sessionFactory = new AtomicReference<>();
 
     @Override
@@ -124,17 +126,24 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
         if (ftpServer == null) {
             String username = context.getProperty(USERNAME).evaluateAttributeExpressions().getValue();
             String password = context.getProperty(PASSWORD).evaluateAttributeExpressions().getValue();
-            String bindAddress = context.getProperty(BINDADDRESS).evaluateAttributeExpressions().getValue();
+            String bindAddress = context.getProperty(BIND_ADDRESS).evaluateAttributeExpressions().getValue();
             int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
 
             try {
-                ftpServer = new NifiFtpServer(sessionFactory, username, password, bindAddress, port);
+                sessionFactorySetSignal = new CountDownLatch(1);
+                ftpServer = new NifiFtpServer.Builder()
+                        .sessionFactory(sessionFactory)
+                        .sessionFactorySetSignal(sessionFactorySetSignal)
+                        .bindAddress(bindAddress)
+                        .port(port)
+                        .username(username)
+                        .password(password)
+                        .build();
                 ftpServer.start();
-            } catch (Exception exception) {
-                String errorMessage = "FTP server could not be started. ";
-                getLogger().error(errorMessage, exception);
+            } catch (ProcessException processException) {
+                getLogger().error(processException.getMessage(), processException);
                 stopFtpServer();
-                throw new ProcessException(errorMessage, exception);
+                throw processException;
             }
         } else {
             getLogger().warn("Ftp server already started.");
@@ -145,13 +154,15 @@ public class ListenFTP extends AbstractSessionFactoryProcessor {
     public void stopFtpServer() {
         if (ftpServer != null && !ftpServer.isStopped()) {
             ftpServer.stop();
-            ftpServer = null;
         }
+        ftpServer = null;
     }
 
     @Override
     public void onTrigger(ProcessContext context, ProcessSessionFactory sessionFactory) throws ProcessException {
-        this.sessionFactory.compareAndSet(null, sessionFactory);
+        if (this.sessionFactory.compareAndSet(null, sessionFactory)) {
+            sessionFactorySetSignal.countDown();
+        }
         context.yield();
     }
 

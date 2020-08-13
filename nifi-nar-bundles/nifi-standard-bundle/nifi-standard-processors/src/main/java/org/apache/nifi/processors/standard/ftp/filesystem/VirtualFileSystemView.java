@@ -17,6 +17,7 @@
 package org.apache.nifi.processors.standard.ftp.filesystem;
 
 import org.apache.ftpserver.ftplet.FileSystemView;
+import org.apache.ftpserver.ftplet.FtpException;
 import org.apache.ftpserver.ftplet.FtpFile;
 import org.apache.ftpserver.ftplet.User;
 import org.slf4j.Logger;
@@ -25,8 +26,8 @@ import org.slf4j.LoggerFactory;
 public class VirtualFileSystemView implements FileSystemView {
 
     private static final Logger LOG = LoggerFactory.getLogger(VirtualFileSystemView.class);
-    private VirtualPath currentDirectory = new VirtualPath("/");
-    private VirtualFileSystem fileSystem;
+    private final VirtualFileSystem fileSystem;
+    private VirtualPath currentDirectory = VirtualFileSystem.ROOT;
 
     public VirtualFileSystemView(User user, VirtualFileSystem fileSystem) throws IllegalArgumentException {
         if (user == null || fileSystem == null) {
@@ -39,7 +40,7 @@ public class VirtualFileSystemView implements FileSystemView {
 
     @Override
     public FtpFile getHomeDirectory() {
-        return new VirtualFtpFile(new VirtualPath("/"), fileSystem);
+        return new VirtualFtpFile(VirtualFileSystem.ROOT, fileSystem);
     }
 
     @Override
@@ -59,8 +60,14 @@ public class VirtualFileSystemView implements FileSystemView {
     }
 
     @Override
-    public FtpFile getFile(String fileName) {
+    public FtpFile getFile(String fileName) throws FtpException {
         VirtualPath filePath = currentDirectory.resolve(fileName);
+        VirtualPath parent = filePath.getParent();
+        if (parent != null) {
+            if (!fileSystem.exists(filePath.getParent())) {
+                throw new FtpException(String.format("Parent directory does not exist for %s", filePath.toString()));
+            }
+        }
         return new VirtualFtpFile(filePath, fileSystem);
     }
 
