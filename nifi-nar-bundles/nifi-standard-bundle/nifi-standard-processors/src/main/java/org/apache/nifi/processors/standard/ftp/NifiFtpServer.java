@@ -160,9 +160,11 @@ public class NifiFtpServer {
             ssl.setKeystoreType(sslContextService.getKeyStoreType());
             ssl.setSslProtocol(sslContextService.getSslAlgorithm());
 
-            ssl.setTruststoreFile(new File(sslContextService.getTrustStoreFile()));
-            ssl.setTruststorePassword(sslContextService.getTrustStorePassword());
-            ssl.setTruststoreType(sslContextService.getTrustStoreType());
+            if (sslContextService.getTrustStoreFile() != null){
+                ssl.setTruststoreFile(new File(sslContextService.getTrustStoreFile()));
+                ssl.setTruststorePassword(sslContextService.getTrustStorePassword());
+                ssl.setTruststoreType(sslContextService.getTrustStoreType());
+            }
 
             listenerFactory.setSslConfiguration(ssl.createSslConfiguration());
             listenerFactory.setImplicitSsl(true);
