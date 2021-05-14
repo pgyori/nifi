@@ -20,6 +20,7 @@ package org.apache.nifi.serialization.record;
 import org.apache.nifi.serialization.record.util.IllegalTypeConversionException;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -141,6 +142,10 @@ public interface Record {
      * @param value the value to set
      */
     void setValue(RecordField field, Object value);
+
+    boolean remove(RecordField field);
+
+    boolean remove(List<RecordField> fieldChain);
 
     /**
      * Updates the value of a the specified index of a field. If the field specified
