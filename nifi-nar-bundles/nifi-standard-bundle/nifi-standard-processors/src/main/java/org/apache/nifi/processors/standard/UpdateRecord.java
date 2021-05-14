@@ -55,6 +55,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -149,6 +150,18 @@ public class UpdateRecord extends AbstractRecordProcessor {
         this.recordPaths = recordPaths;
     }
 
+    private Record remove(Record record, List<FieldValue> selectedFields) {
+        for (FieldValue field : selectedFields) {
+            final Optional<Record> parentRecordOption = field.getParentRecord();
+            if (parentRecordOption.isPresent()) {
+                Record parentRecord = parentRecordOption.get();
+                parentRecord.remove(field.getField());
+            }
+        }
+        record.regenerateSchema();
+        return record;
+    }
+
     @Override
     protected Record process(Record record, final FlowFile flowFile, final ProcessContext context, final long count) {
         final boolean evaluateValueAsRecordPath = context.getProperty(REPLACEMENT_VALUE_STRATEGY).getValue().equals(RECORD_PATH_VALUES.getValue());
@@ -159,14 +172,19 @@ public class UpdateRecord extends AbstractRecordProcessor {
 
             if (evaluateValueAsRecordPath) {
                 final String replacementValue = context.getProperty(recordPathText).evaluateAttributeExpressions(flowFile).getValue();
-                final RecordPath replacementRecordPath = recordPathCache.getCompiled(replacementValue);
-
-                // If we have an Absolute RecordPath, we need to evaluate the RecordPath only once against the Record.
-                // If the RecordPath is a Relative Path, then we have to evaluate it against each FieldValue.
-                if (replacementRecordPath.isAbsolute()) {
-                    record = processAbsolutePath(replacementRecordPath, result.getSelectedFields(), record);
+                if ("".equals(replacementValue)) {
+                    List<FieldValue> selectedFields = result.getSelectedFields().collect(Collectors.toList());
+                    record = remove(record, selectedFields);
                 } else {
-                    record = processRelativePath(replacementRecordPath, result.getSelectedFields(), record);
+                    final RecordPath replacementRecordPath = recordPathCache.getCompiled(replacementValue);
+
+                    // If we have an Absolute RecordPath, we need to evaluate the RecordPath only once against the Record.
+                    // If the RecordPath is a Relative Path, then we have to evaluate it against each FieldValue.
+                    if (replacementRecordPath.isAbsolute()) {
+                        record = processAbsolutePath(replacementRecordPath, result.getSelectedFields(), record);
+                    } else {
+                        record = processRelativePath(replacementRecordPath, result.getSelectedFields(), record);
+                    }
                 }
             } else {
                 final PropertyValue replacementValue = context.getProperty(recordPathText);
