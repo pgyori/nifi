@@ -19,12 +19,14 @@ package org.apache.nifi.xml;
 
 import org.apache.nifi.reporting.InitializationException;
 import org.apache.nifi.schema.access.SchemaAccessUtils;
+import org.apache.nifi.schema.inference.SchemaInferenceUtil;
 import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
 import org.junit.jupiter.api.Test;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -156,5 +158,33 @@ public class TestXMLReader {
         assertEquals("MapRecord[{ID=P3, NAME=MapRecord[{CONTENT=Amélie Bonfils, ATTR=attr content, INNER=inner content}], AGE=74}]", records.get(2));
         assertEquals("MapRecord[{ID=P4, NAME=MapRecord[{CONTENT=Elenora Scrivens, ATTR=attr content, INNER=inner content}], AGE=16}]", records.get(3));
         assertEquals("MapRecord[{ID=P5, NAME=MapRecord[{INNER=inner content}]}]", records.get(4));
+    }
+
+    @Test
+    public void testInferSchema() throws InitializationException, IOException {
+        // GIVEN
+        String inputXMLPath = "src/test/resources/xml/person_record.xml";
+        String expectedContent = "MapRecord[{software=MapRecord[{favorite=true,value=Apache NiFi}], num=123, name=John Doe}]";
+
+        TestXMLReaderProcessor processor = new TestXMLReaderProcessor();
+        XMLReader reader = new XMLReader();
+
+        TestRunner runner = TestRunners.newTestRunner(processor);
+
+        // WHEN
+        runner.addControllerService("xml_reader", reader);
+        runner.setProperty(reader, SchemaAccessUtils.SCHEMA_ACCESS_STRATEGY, SchemaInferenceUtil.INFER_SCHEMA);
+        runner.setProperty(reader, XMLReader.RECORD_FORMAT, XMLReader.RECORD_SINGLE);
+        runner.setProperty(TestXMLReaderProcessor.XML_READER, "xml_reader");
+        runner.enableControllerService(reader);
+
+        InputStream is = new FileInputStream(inputXMLPath);
+        runner.enqueue(is);
+        runner.run();
+
+        // THEN
+        MockFlowFile out = runner.getFlowFilesForRelationship(TestXMLReaderProcessor.SUCCESS).get(0);
+        String actualContent = out.getContent();
+        assertEquals(expectedContent, actualContent);
     }
 }
