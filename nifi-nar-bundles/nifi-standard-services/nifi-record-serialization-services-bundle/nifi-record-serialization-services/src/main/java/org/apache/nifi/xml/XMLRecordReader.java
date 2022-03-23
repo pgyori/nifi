@@ -475,7 +475,11 @@ public class XMLRecordReader implements RecordReader {
             } else if (xmlEvent.isCharacters()) {
                 final Characters characters = xmlEvent.asCharacters();
                 if (!characters.isWhiteSpace()) {
-                    content.append(characters.getData());
+                    if (startElement.getAttributes().hasNext()) {
+                        recordValues.put("value", characters.getData());
+                    } else {
+                        content.append(characters.getData());
+                    }
                 }
             }
         }

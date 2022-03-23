@@ -194,7 +194,7 @@ public class TestXMLReader {
     @Test
     public void testInferSchema() throws InitializationException, IOException {
         // GIVEN
-        String expectedContent = "MapRecord[{software=MapRecord[{favorite=true,value=Apache NiFi}], num=123, name=John Doe}]";
+        String expectedContent = "MapRecord[{software=MapRecord[{favorite=true, value=Apache NiFi}], num=123, name=John Doe}]";
 
         Map<PropertyDescriptor, String> xmlReaderProperties = new HashMap<>();
         xmlReaderProperties.put(SchemaAccessUtils.SCHEMA_ACCESS_STRATEGY, SchemaInferenceUtil.INFER_SCHEMA.getValue());
