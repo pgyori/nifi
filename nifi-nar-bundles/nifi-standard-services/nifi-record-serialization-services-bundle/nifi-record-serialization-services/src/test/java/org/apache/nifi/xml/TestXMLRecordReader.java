@@ -30,6 +30,7 @@ import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
@@ -1271,6 +1272,122 @@ public class TestXMLRecordReader {
                 .getValue("ID"));
     }
 
+    @Test
+    public void testSimpleTypeWithAttributesIgnored1() throws IOException, MalformedRecordException {
+        // GIVEN
+        boolean parseXMLAttributes = false;
+        boolean coerceTypes = true;
+        boolean dropUnknownFields = true;
+
+        // WHEN
+        List<Record> records = simpleTypeWithAttributesIgnored(parseXMLAttributes, coerceTypes, dropUnknownFields);
+
+        // THEN
+        Record first = records.get(0);
+        Record second = records.get(1);
+
+        assertTrue(first.getValue("NAME") instanceof String);
+        assertEquals("Cleve Butler", first.getValue("NAME"));
+        assertTrue(first.getValue("AGE") instanceof Integer);
+        assertEquals(42, first.getValue("AGE"));
+        assertEquals(2, first.toMap().size());
+
+        assertTrue(second.getValue("NAME") instanceof String);
+        assertEquals("Ainslie Fletcher", second.getValue("NAME"));
+        assertTrue(second.getValue("AGE") instanceof  Integer);
+        assertEquals(33, second.getValue("AGE"));
+        assertEquals(2, second.toMap().size());
+    }
+
+    @Test
+    public void testSimpleTypeWithAttributesIgnored2() throws IOException, MalformedRecordException {
+        // GIVEN
+        boolean parseXMLAttributes = false;
+        boolean coerceTypes = false;
+        boolean dropUnknownFields = true;
+
+        // WHEN
+        List<Record> records = simpleTypeWithAttributesIgnored(parseXMLAttributes, coerceTypes, dropUnknownFields);
+
+        // THEN
+        Record first = records.get(0);
+        Record second = records.get(1);
+
+        assertTrue(first.getValue("NAME") instanceof String);
+        assertEquals("Cleve Butler", first.getValue("NAME"));
+        assertTrue(first.getValue("AGE") instanceof String);
+        assertEquals("42", first.getValue("AGE"));
+        assertEquals(2, first.toMap().size());
+
+        assertTrue(second.getValue("NAME") instanceof String);
+        assertEquals("Ainslie Fletcher", second.getValue("NAME"));
+        assertTrue(second.getValue("AGE") instanceof  String);
+        assertEquals("33", second.getValue("AGE"));
+        assertEquals(2, second.toMap().size());
+    }
+
+    @Test
+    public void testSimpleTypeWithAttributesIgnored3() throws IOException, MalformedRecordException {
+        // GIVEN
+        boolean parseXMLAttributes = false;
+        boolean coerceTypes = true;
+        boolean dropUnknownFields = false;
+
+        // WHEN
+        List<Record> records = simpleTypeWithAttributesIgnored(parseXMLAttributes, coerceTypes, dropUnknownFields);
+
+        // THEN
+        Record first = records.get(0);
+        Record second = records.get(1);
+
+        assertTrue(first.getValue("NAME") instanceof String);
+        assertEquals("Cleve Butler", first.getValue("NAME"));
+        assertTrue(first.getValue("AGE") instanceof Integer);
+        assertEquals(42, first.getValue("AGE"));
+        assertTrue(first.getValue("COUNTRY") instanceof String);
+        assertEquals("USA", first.getValue("COUNTRY"));
+        assertEquals(3, first.toMap().size());
+
+        assertTrue(second.getValue("NAME") instanceof String);
+        assertEquals("Ainslie Fletcher", second.getValue("NAME"));
+        assertTrue(second.getValue("AGE") instanceof  Integer);
+        assertEquals(33, second.getValue("AGE"));
+        assertTrue(second.getValue("COUNTRY") instanceof  String);
+        assertEquals("UK", second.getValue("COUNTRY"));
+        assertEquals(3, second.toMap().size());
+    }
+
+    @Test
+    public void testSimpleTypeWithAttributesIgnored4() throws IOException, MalformedRecordException {
+        // GIVEN
+        boolean parseXMLAttributes = false;
+        boolean coerceTypes = false;
+        boolean dropUnknownFields = false;
+
+        // WHEN
+        List<Record> records = simpleTypeWithAttributesIgnored(parseXMLAttributes, coerceTypes, dropUnknownFields);
+
+        // THEN
+        Record first = records.get(0);
+        Record second = records.get(1);
+
+        assertTrue(first.getValue("NAME") instanceof String);
+        assertEquals("Cleve Butler", first.getValue("NAME"));
+        assertTrue(first.getValue("AGE") instanceof String);
+        assertEquals("42", first.getValue("AGE"));
+        assertTrue(first.getValue("COUNTRY") instanceof String);
+        assertEquals("USA", first.getValue("COUNTRY"));
+        assertEquals(3, first.toMap().size());
+
+        assertTrue(second.getValue("NAME") instanceof String);
+        assertEquals("Ainslie Fletcher", second.getValue("NAME"));
+        assertTrue(second.getValue("AGE") instanceof  String);
+        assertEquals("33", second.getValue("AGE"));
+        assertTrue(second.getValue("COUNTRY") instanceof  String);
+        assertEquals("UK", second.getValue("COUNTRY"));
+        assertEquals(3, second.toMap().size());
+    }
+
     private List<RecordField> getSimpleRecordFields() {
         final List<RecordField> fields = new ArrayList<>();
         fields.add(new RecordField("NAME", RecordFieldType.STRING.getDataType()));
@@ -1452,5 +1569,21 @@ public class TestXMLRecordReader {
             addAll(getSimpleFieldsForComplexData());
         }};
         return new SimpleRecordSchema(fields);
+    }
+
+    private List<Record> simpleTypeWithAttributesIgnored(boolean parseXMLAttributes, boolean coerceTypes, boolean dropunknownFields) throws IOException, MalformedRecordException {
+        InputStream is = new FileInputStream("src/test/resources/xml/people3.xml");
+
+        final List<RecordField> fields = new ArrayList<>();
+        fields.add(new RecordField("NAME", RecordFieldType.STRING.getDataType()));
+        fields.add(new RecordField("AGE", RecordFieldType.INT.getDataType()));
+
+        XMLRecordReader reader = new XMLRecordReader(is, new SimpleRecordSchema(fields), true,  parseXMLAttributes,
+                null, "CONTENT", dateFormat, timeFormat, timestampFormat, Mockito.mock(ComponentLog.class));
+
+        List<Record> records = new ArrayList<>(2);
+        records.add(reader.nextRecord(coerceTypes, dropunknownFields));
+        records.add(reader.nextRecord(coerceTypes, dropunknownFields));
+        return records;
     }
 }
