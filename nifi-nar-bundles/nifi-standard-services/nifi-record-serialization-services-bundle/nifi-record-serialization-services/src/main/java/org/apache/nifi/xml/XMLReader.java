@@ -193,7 +193,7 @@ public class XMLReader extends SchemaRegistryService implements RecordReaderFact
         final String contentFieldName = trim(context.getProperty(CONTENT_FIELD_NAME).evaluateAttributeExpressions(variables).getValue());
         final boolean isArray = isMultipleRecords(context, variables);
 
-        return new XMLRecordReader(in, schema, isArray, attributePrefix, contentFieldName, dateFormat, timeFormat, timestampFormat, logger);
+        return new XMLRecordReader(in, schema, isArray, parseXMLAttributes, attributePrefix, contentFieldName, dateFormat, timeFormat, timestampFormat, logger);
     }
 
     private String trim(final String value) {
