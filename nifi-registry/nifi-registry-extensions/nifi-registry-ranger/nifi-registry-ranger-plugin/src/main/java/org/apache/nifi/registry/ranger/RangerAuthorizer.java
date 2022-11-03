@@ -66,7 +66,11 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -100,7 +104,7 @@ public class RangerAuthorizer implements ManagedAuthorizer, AuthorizationAuditor
 
     private volatile RangerBasePluginWithPolicies rangerPlugin = null;
     private volatile RangerDefaultAuditHandler defaultAuditHandler = null;
-    private volatile String rangerAdminIdentity = null;
+    private volatile Set<String> rangerAdminIdentity = null;
     private volatile NiFiRegistryProperties registryProperties;
 
     private UserGroupProviderLookup userGroupProviderLookup;
@@ -165,7 +169,7 @@ public class RangerAuthorizer implements ManagedAuthorizer, AuthorizationAuditor
                 rangerPlugin.init();
 
                 defaultAuditHandler = new RangerDefaultAuditHandler();
-                rangerAdminIdentity = getConfigValue(configurationContext, RANGER_ADMIN_IDENTITY_PROP, null);
+                rangerAdminIdentity = getConfigValues(configurationContext, RANGER_ADMIN_IDENTITY_PROP, null);
 
             } else {
                 logger.info("base plugin already initialized");
@@ -185,9 +189,9 @@ public class RangerAuthorizer implements ManagedAuthorizer, AuthorizationAuditor
         final Set<String> userGroups = request.getGroups();
         final String resourceIdentifier = request.getResource().getIdentifier();
 
-        // if a ranger admin identity was provided, and it equals the identity making the request,
+        // if a ranger admin identity was provided, and it contains the identity making the request,
         // and the request is to retrieve the resources, then allow it through
-        if (StringUtils.isNotBlank(rangerAdminIdentity) && rangerAdminIdentity.equals(identity)
+        if (rangerAdminIdentity != null && rangerAdminIdentity.contains(identity)
                 && resourceIdentifier.equals(RESOURCES_RESOURCE)) {
             return AuthorizationResult.approved();
         }
@@ -315,6 +319,22 @@ public class RangerAuthorizer implements ManagedAuthorizer, AuthorizationAuditor
         }
 
         return retValue;
+    }
+
+    // When the config value is a comma-separated list
+    private Set<String> getConfigValues(final AuthorizerConfigurationContext context, final String name, final String defaultValue) {
+        final String configValue = getConfigValue(context, name, defaultValue);
+
+        if (configValue != null) {
+            List<String> values = Arrays.asList(configValue.split(","));
+            Set<String> result = new HashSet<>(values.size());
+            for (String value : values) {
+                result.add(value.trim());
+            }
+            return result;
+        } else {
+            return Collections.emptySet();
+        }
     }
 
     @Override

@@ -339,20 +339,48 @@ public class TestRangerNiFiAuthorizer {
 
     @Test
     public void testRangerAdminApproved() {
-        runRangerAdminTest(RangerNiFiAuthorizer.RESOURCES_RESOURCE, AuthorizationResult.approved().getResult());
+        final String rangerAdminIdentity = "ranger-admin";
+        runRangerAdminTest(RangerNiFiAuthorizer.RESOURCES_RESOURCE, rangerAdminIdentity,
+                rangerAdminIdentity, AuthorizationResult.approved().getResult());
+    }
+
+    @Test
+    public void testRangerAdminApprovedMultipleAcceptableIdentities() {
+        final String acceptableIdentities = "ranger-admin1,ranger-admin2, ranger-admin3";
+        final String requestIdentity = "ranger-admin2";
+        runRangerAdminTest(RangerNiFiAuthorizer.RESOURCES_RESOURCE, acceptableIdentities,
+                requestIdentity, AuthorizationResult.approved().getResult());
+    }
+
+    @Test
+    public void testRangerAdminApprovedMultipleAcceptableIdentities2() {
+        final String acceptableIdentities = "ranger-admin1,ranger-admin2, ranger-admin3";
+        final String requestIdentity = "ranger-admin3";
+        runRangerAdminTest(RangerNiFiAuthorizer.RESOURCES_RESOURCE, acceptableIdentities,
+                requestIdentity, AuthorizationResult.approved().getResult());
     }
 
     @Test
     public void testRangerAdminDenied() {
-        runRangerAdminTest("/flow", AuthorizationResult.denied().getResult());
+        final String rangerAdminIdentity = "ranger-admin";
+        runRangerAdminTest("/flow", rangerAdminIdentity,
+                rangerAdminIdentity, AuthorizationResult.denied().getResult());
     }
 
-    private void runRangerAdminTest(final String resourceIdentifier, final AuthorizationResult.Result expectedResult) {
+    @Test
+    public void testRangerAdminDeniedMultipleAcceptableIdentities() {
+        final String acceptableIdentities = "ranger-admin1,ranger-admin2, ranger-admin3";
+        final String requestIdentity = "ranger-admin4";
+        runRangerAdminTest(RangerNiFiAuthorizer.RESOURCES_RESOURCE, acceptableIdentities,
+                requestIdentity, AuthorizationResult.denied().getResult());
+    }
+
+    private void runRangerAdminTest(final String resourceIdentifier, final String acceptableIdentity,
+            final String requestIdentity, final AuthorizationResult.Result expectedResult) {
         configurationContext = createMockConfigContext();
 
-        final String rangerAdminIdentity = "ranger-admin";
         when(configurationContext.getProperty(eq(RangerNiFiAuthorizer.RANGER_ADMIN_IDENTITY_PROP)))
-                .thenReturn(new MockPropertyValue(rangerAdminIdentity));
+                .thenReturn(new MockPropertyValue(acceptableIdentity));
 
         rangerBasePlugin = Mockito.mock(RangerBasePluginWithPolicies.class);
 
@@ -368,7 +396,7 @@ public class TestRangerNiFiAuthorizer {
         final AuthorizationRequest request = new AuthorizationRequest.Builder()
                 .resource(new MockResource(resourceIdentifier, resourceIdentifier))
                 .action(action)
-                .identity(rangerAdminIdentity)
+                .identity(requestIdentity)
                 .resourceContext(new HashMap<>())
                 .accessAttempt(true)
                 .anonymous(false)

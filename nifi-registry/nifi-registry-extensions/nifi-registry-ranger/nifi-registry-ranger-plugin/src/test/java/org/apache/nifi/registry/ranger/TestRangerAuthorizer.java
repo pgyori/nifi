@@ -53,9 +53,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -388,20 +388,48 @@ public class TestRangerAuthorizer {
 
     @Test
     public void testRangerAdminApproved() {
-        runRangerAdminTest(RangerAuthorizer.RESOURCES_RESOURCE, AuthorizationResult.approved().getResult());
+        final String rangerAdminIdentity = "ranger-admin";
+        runRangerAdminTest(RangerAuthorizer.RESOURCES_RESOURCE, rangerAdminIdentity,
+                rangerAdminIdentity, AuthorizationResult.approved().getResult());
+    }
+
+    @Test
+    public void testRangerAdminApprovedMultipleAcceptableIdentities() {
+        final String acceptableIdentities = "ranger-admin1,ranger-admin2, ranger-admin3";
+        final String requestIdentity = "ranger-admin2";
+        runRangerAdminTest(RangerAuthorizer.RESOURCES_RESOURCE, acceptableIdentities,
+                requestIdentity, AuthorizationResult.approved().getResult());
+    }
+
+    @Test
+    public void testRangerAdminApprovedMultipleAcceptableIdentities2() {
+        final String acceptableIdentities = "ranger-admin1,ranger-admin2, ranger-admin3";
+        final String requestIdentity = "ranger-admin3";
+        runRangerAdminTest(RangerAuthorizer.RESOURCES_RESOURCE, acceptableIdentities,
+                requestIdentity, AuthorizationResult.approved().getResult());
     }
 
     @Test
     public void testRangerAdminDenied() {
-        runRangerAdminTest("/flow", AuthorizationResult.denied().getResult());
+        final String rangerAdminIdentity = "ranger-admin";
+        runRangerAdminTest("/flow", rangerAdminIdentity,
+                rangerAdminIdentity, AuthorizationResult.denied().getResult());
     }
 
-    private void runRangerAdminTest(final String resourceIdentifier, final AuthorizationResult.Result expectedResult) {
+    @Test
+    public void testRangerAdminDeniedMultipleAcceptableIdentities() {
+        final String acceptableIdentities = "ranger-admin1,ranger-admin2, ranger-admin3";
+        final String requestIdentity = "ranger-admin4";
+        runRangerAdminTest(RangerAuthorizer.RESOURCES_RESOURCE, acceptableIdentities,
+                requestIdentity, AuthorizationResult.denied().getResult());
+    }
+
+    private void runRangerAdminTest(final String resourceIdentifier, final String acceptableIdentity,
+                                    final String requestIdentity, final AuthorizationResult.Result expectedResult) {
         final AuthorizerConfigurationContext configurationContext = createMockConfigContext();
 
-        final String rangerAdminIdentity = "ranger-admin";
         when(configurationContext.getProperty(eq(RangerAuthorizer.RANGER_ADMIN_IDENTITY_PROP)))
-                .thenReturn(new StandardPropertyValue(rangerAdminIdentity));
+                .thenReturn(new StandardPropertyValue(acceptableIdentity));
 
         setup(mock(NiFiRegistryProperties.class), mock(UserGroupProvider.class), configurationContext);
 
@@ -411,7 +439,7 @@ public class TestRangerAuthorizer {
         final AuthorizationRequest request = new AuthorizationRequest.Builder()
                 .resource(new MockResource(resourceIdentifier, resourceIdentifier))
                 .action(action)
-                .identity(rangerAdminIdentity)
+                .identity(requestIdentity)
                 .resourceContext(new HashMap<>())
                 .accessAttempt(true)
                 .anonymous(false)

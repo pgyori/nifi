@@ -47,7 +47,11 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.text.NumberFormat;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -76,7 +80,7 @@ public class RangerNiFiAuthorizer implements Authorizer, AuthorizationAuditor {
 
     private volatile RangerBasePluginWithPolicies nifiPlugin = null;
     private volatile RangerDefaultAuditHandler defaultAuditHandler = null;
-    private volatile String rangerAdminIdentity = null;
+    private volatile Set<String> rangerAdminIdentity = null;
     private volatile boolean rangerKerberosEnabled = false;
     private volatile NiFiProperties nifiProperties;
     private final NumberFormat numberFormat = NumberFormat.getInstance();
@@ -129,7 +133,7 @@ public class RangerNiFiAuthorizer implements Authorizer, AuthorizationAuditor {
                 nifiPlugin.init();
 
                 defaultAuditHandler = new RangerDefaultAuditHandler();
-                rangerAdminIdentity = getConfigValue(configurationContext, RANGER_ADMIN_IDENTITY_PROP, null);
+                rangerAdminIdentity = getConfigValues(configurationContext, RANGER_ADMIN_IDENTITY_PROP, null);
 
             } else {
                 logger.info("RangerNiFiAuthorizer(): base plugin already initialized");
@@ -149,9 +153,9 @@ public class RangerNiFiAuthorizer implements Authorizer, AuthorizationAuditor {
         final Set<String> userGroups = request.getGroups();
         final String resourceIdentifier = request.getResource().getIdentifier();
 
-        // if a ranger admin identity was provided, and it equals the identity making the request,
+        // if a ranger admin identity was provided, and it contains the identity making the request,
         // and the request is to retrieve the resources, then allow it through
-        if (StringUtils.isNotBlank(rangerAdminIdentity) && rangerAdminIdentity.equals(identity)
+        if (rangerAdminIdentity != null && rangerAdminIdentity.contains(identity)
                 && resourceIdentifier.equals(RESOURCES_RESOURCE)) {
             return AuthorizationResult.approved();
         }
@@ -285,6 +289,22 @@ public class RangerNiFiAuthorizer implements Authorizer, AuthorizationAuditor {
         }
 
         return retValue;
+    }
+
+    // When the config value is a comma-separated list
+    private Set<String> getConfigValues(final AuthorizerConfigurationContext context, final String name, final String defaultValue) {
+        final String configValue = getConfigValue(context, name, defaultValue);
+
+        if (configValue != null) {
+            List<String> values = Arrays.asList(configValue.split(","));
+            Set<String> result = new HashSet<>(values.size());
+            for (String value : values) {
+                result.add(value.trim());
+            }
+            return result;
+        } else {
+            return Collections.emptySet();
+        }
     }
 
 }
