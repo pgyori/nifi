@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from enum import Enum
+from nifiapi.componentstate import StateManager
 from nifiapi.__jvm__ import JvmHolder
 import re
 
@@ -351,33 +352,6 @@ class ProcessContext(PropertyContext):
 
     def getStateManager(self):
         return StateManager(self.java_context.getStateManager())
-
-# The purpose of this class is to wrap the Java StateManager
-# and always pass Scope.CLUSTER scope parameter to its method calls
-# so that it does not need to be done from the Python processor.
-class StateManager:
-
-    cluster_state = JvmHolder.jvm.org.apache.nifi.components.state.Scope.CLUSTER
-
-    _java_state_manager = None
-
-    def __init__(self, java_state_manager):
-        self._java_state_manager = java_state_manager
-
-    def setState(self, state):
-        self._java_state_manager.setState(state, self.cluster_state)
-
-    def getState(self):
-        return self._java_state_manager.getState(self.cluster_state)
-
-    def replace(self, oldValue, newValue):
-        self._java_state_manager.replace(oldValue, newValue, self.cluster_state)
-
-    def clear(self):
-        self._java_state_manager.clear(self.cluster_state)
-
-    def create_empty_map(self):
-        return JvmHolder.jvm.java.util.HashMap()
 
 
 class ValidationContext(PropertyContext):
